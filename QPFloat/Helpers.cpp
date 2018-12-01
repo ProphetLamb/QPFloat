@@ -18,6 +18,8 @@ This file is part of QPFloat.
 	along with QPFloat.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iostream>
+#include <intrin.h>
 #include "StdAfx.h"
 #include "Helpers.h"
 
