@@ -62,6 +62,7 @@ cd(one);
 cd(negOne);
 cd(half);
 cd(sinQuarterPi);
+cd(epsilon);
 #undef cd
 
  #define MAX_FACTORIAL 1754

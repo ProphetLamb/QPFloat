@@ -490,8 +490,28 @@ namespace System
 		//see http://msdn.microsoft.com/en-us/library/system.iformatprovider.getformat.aspx
 		//see http://msdn.microsoft.com/en-us/library/system.globalization.numberformatinfo.aspx
 		// 
-		return ToString();
+		format = format->Trim();
+		if (format->StartsWith("X", true, System::Globalization::CultureInfo::InvariantCulture)) //hexadecimal
+		{
+			System::Text::StringBuilder^ result = gcnew System::Text::StringBuilder();
+			for (int i = 0; i < 16; i++)
+			{
+				result->AppendFormat("{0:X2}", storage[i]);
+			}
+			return result->ToString();
+		}
+		else if (format->StartsWith("B", true, System::Globalization::CultureInfo::InvariantCulture)) //bytes in decimals
+		{
+			System::Text::StringBuilder^ result = gcnew System::Text::StringBuilder();
+			for (int i = 0; i < 16; i++)
+			{
+				result->AppendFormat("{0},", storage[i]);
+			}
+			return result->ToString();
+		}
+		else return ToString(); //decimal
 	}
+
 	String^ Quadruple::ToString(IFormatProvider^ provider )
 	{
 		//todo: Implement this correctly
@@ -502,6 +522,7 @@ namespace System
 		// 
 		return ToString();
 	}
+
 	System::Quadruple Quadruple::FromString( String^ str )
 	{
 		str = str->Trim();

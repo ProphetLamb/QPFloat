@@ -4,3 +4,5 @@
 
 /.vs
 /Debug
+/x64/Release
+/QPFloat/x64/Release

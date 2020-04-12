@@ -44,6 +44,7 @@ QUAD_CONSTANT(One, one);
 QUAD_CONSTANT(NegOne, negOne);
 QUAD_CONSTANT(Half, half);
 QUAD_CONSTANT(SinQuarterPi, sinQuarterPi);
+QUAD_CONSTANT(Epsilon, epsilon);
 #undef QUAD_CONSTANT
 
 #define FPU_EXCEPTION_DEFINITION(x) \
