@@ -1060,8 +1060,8 @@ __float128 __float128::ATan( __float128 &v )
 __float128 __float128::ATan2( __float128 &y, __float128 &x )
 {
 	__float128 tan;
-	if (x.IsNaN) return x;
-	if (y.IsNaN) return y;
+	if (x.IsNaN()) return x;
+	if (y.IsNaN()) return y;
 	if (y.IsZero()) //ATan2(+-0, +(anything but NaN)) = +-0 ; ATan2(+-0, -(anything but NaN)) = +-Pi
 	{
 		if (x.GetSign()) tan = QuadPi;

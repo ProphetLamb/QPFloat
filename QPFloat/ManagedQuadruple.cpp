@@ -548,7 +548,7 @@ namespace System
 		return result;
 	}
 
-	int Quadruple::IComparable::CompareTo(Quadruple x)	//	AK
+	int Quadruple::CompareTo(Quadruple x)	//	AK
 	{
 		pin_ptr<byte> aPtr = storage;
 		pin_ptr<byte> bPtr = x.storage;
@@ -556,7 +556,6 @@ namespace System
 			: (*(__float128*)aPtr) > (*(__float128*)bPtr) ? +1
 			: 0;
 	}
-
 }
 
 #endif
