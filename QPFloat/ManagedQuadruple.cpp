@@ -349,6 +349,62 @@ namespace System
 		return *(Quadruple*)&result;
 	}
 
+	System::Quadruple Quadruple::Sinh(Quadruple v)
+	{
+		pin_ptr<byte> vPtr = v.storage;
+		__float128 result = __float128::Sinh(*(__float128*)vPtr);
+		return *(Quadruple*)&result;
+	}
+
+	System::Quadruple Quadruple::Cosh(Quadruple v)
+	{
+		pin_ptr<byte> vPtr = v.storage;
+		__float128 result = __float128::Cosh(*(__float128*)vPtr);
+		return *(Quadruple*)&result;
+	}
+
+	System::Quadruple Quadruple::Tanh(Quadruple v)
+	{
+		pin_ptr<byte> vPtr = v.storage;
+		__float128 result = __float128::Tanh(*(__float128*)vPtr);
+		return *(Quadruple*)&result;
+	}
+
+	System::Quadruple Quadruple::Coth(Quadruple v)
+	{
+		pin_ptr<byte> vPtr = v.storage;
+		__float128 result = __float128::Coth(*(__float128*)vPtr);
+		return *(Quadruple*)&result;
+	}
+
+	System::Quadruple Quadruple::ASinh(Quadruple v)
+	{
+		pin_ptr<byte> vPtr = v.storage;
+		__float128 result = __float128::ASinh(*(__float128*)vPtr);
+		return *(Quadruple*)&result;
+	}
+
+	System::Quadruple Quadruple::ACosh(Quadruple v)
+	{
+		pin_ptr<byte> vPtr = v.storage;
+		__float128 result = __float128::ACosh(*(__float128*)vPtr);
+		return *(Quadruple*)&result;
+	}
+
+	System::Quadruple Quadruple::ATanh(Quadruple v)
+	{
+		pin_ptr<byte> vPtr = v.storage;
+		__float128 result = __float128::ATanh(*(__float128*)vPtr);
+		return *(Quadruple*)&result;
+	}
+
+	System::Quadruple Quadruple::ACoth(Quadruple v)
+	{
+		pin_ptr<byte> vPtr = v.storage;
+		__float128 result = __float128::ACoth(*(__float128*)vPtr);
+		return *(Quadruple*)&result;
+	}
+
 	String^ Quadruple::ToString()
 	{
 		if (IsNaN) return "NaN";

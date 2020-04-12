@@ -401,6 +401,14 @@ namespace System
 		static Quadruple ACos(Quadruple v);
 		static Quadruple ATan(Quadruple v);
 		static Quadruple ATan2(Quadruple y, Quadruple x);
+		static Quadruple Sinh(Quadruple v);
+		static Quadruple Cosh(Quadruple v);
+		static Quadruple Tanh(Quadruple v);
+		static Quadruple Coth(Quadruple v);
+		static Quadruple ASinh(Quadruple v);
+		static Quadruple ACosh(Quadruple v);
+		static Quadruple ATanh(Quadruple v);
+		static Quadruple ACoth(Quadruple v);
 
 		virtual String^ ToString() override;
 		String^ ToString(String^ format);

@@ -329,6 +329,14 @@ public:
 	static __float128 ACos(__float128 &v);
 	static __float128 ATan(__float128 &v);
 	static __float128 ATan2(__float128 &y, __float128 &x);
+	static __float128 Sinh(__float128& v);
+	static __float128 Cosh(__float128& v);
+	static __float128 Tanh(__float128& v);
+	static __float128 Coth(__float128& v);
+	static __float128 ASinh(__float128& v);
+	static __float128 ACosh(__float128& v);
+	static __float128 ATanh(__float128& v);
+	static __float128 ACoth(__float128& v);
 private:
 	//static __float128 Factorial(__float128 &v);
 };

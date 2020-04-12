@@ -1072,6 +1072,153 @@ __float128 __float128::ATan2( __float128 &y, __float128 &x )
 		return partial;
 }
 
+__float128 __float128::Sinh(__float128& v)
+{
+	if (v.IsNaN()) return v;
+	if (v.IsInfinite()) return v;
+	if (v.IsZero()) return v;
+	__float128 result = v;
+	__float128 temp;
+	temp = Exp(v);
+	result = Exp(-v);
+	Sub(temp, result, result);
+	Div(result, 2.0, result);
+	return result;
+}
+
+__float128 __float128::Cosh(__float128& v)
+{
+	if (v.IsNaN()) return v;
+	if (v.IsInfinite()) return QuadPositiveInfinity;
+	if (v.IsZero()) return QuadOne;
+	__float128 result = v;
+	__float128 temp;
+	temp = Exp(v);
+	result = Exp(-v);
+	Add(temp, result, result);
+	Div(result, 2.0, result);
+	return result;
+}
+
+__float128 __float128::Tanh(__float128& v)
+{
+	if (v.IsNaN()) return v;
+	if (v.IsInfinite())
+	{
+		if (v.GetSign())
+			return QuadNegOne;
+		return QuadOne;
+	}
+	if (v.IsZero()) return v;
+	__float128 result = QuadOne;
+	__float128 vSquared;
+	Mul(v, v, vSquared);
+	for (int i = 85; i >= 0; i--)
+	{
+		Div(vSquared, result, result);
+		Add(result, 1 + 2 * i, result);
+	}
+	Div(v, result, result);
+	return result;
+}
+
+__float128 __float128::Coth(__float128& v) //(exp(v) + exp(-z))/(exp(z) - exp(-z))
+{
+	if (v.IsNaN()) return v;
+	if (v.IsInfinite())
+	{
+		if (v.GetSign())
+			return QuadNegOne;
+		return QuadOne;
+	}
+	if (v.IsZero())
+	{
+		if (v.GetSign())
+			return QuadNegativeInfinity;
+		return QuadPositiveInfinity;
+	}
+	__float128 result;
+	__float128 temp;
+	__float128 expV;
+	__float128 expNegV = v;
+	Negate(expNegV);
+	expNegV = Exp(expNegV);
+	expV = Exp(v);
+	Add(expV, expNegV, temp);
+	Sub(expV, expNegV, result);
+	Div(temp, result, result);
+	return result;
+}
+
+__float128 __float128::ASinh(__float128& v) //log_e(sqrt(x^2+1)+x)
+{
+	if (v.IsNaN()) return v;
+	if (v.IsInfinite()) return v;
+	if (v.IsZero()) return v;
+	__float128 result;
+	Mul(v, v, result);
+	Add(result, QuadOne, result);
+	result = Pow(result, QuadHalf);
+	Add(result, v, result);
+	result = Ln(result);
+	return result;
+}
+
+__float128 __float128::ACosh(__float128& v) //log_e(x+sqrt(x-1)*sqrt(x+1))
+{
+	if (v.IsNaN()) return v;
+	if (v == QuadOne) return QuadZero;
+	if (v < QuadOne) return QuadNaN;
+	if (v.IsInfinite()) return v;
+	__float128 result;
+	__float128 temp;
+	Sub(v, QuadOne, temp);
+	result = Pow(temp, QuadHalf);
+	Add(v, QuadOne, temp);
+	temp = Pow(temp, QuadHalf);
+	Mul(result, temp, temp);
+	Add(v, temp, temp);
+	result = Ln(temp);
+	return result;
+}
+
+__float128 __float128::ATanh(__float128& v) //0.5*log_e(x+1)-0.5*log_e(1-x)
+{
+	if (v.IsNaN()) return v;
+	if (v == QuadOne) return QuadPositiveInfinity;
+	if (v == QuadNegOne) return QuadNegativeInfinity;
+	if (v.IsZero()) return v;
+	__float128 result;
+	__float128 temp;
+	Add(v, QuadOne, temp);
+	temp = Ln(temp);
+	Mul(temp, QuadHalf, result);
+	Sub(1, v, temp);
+	temp = Ln(temp);
+	Mul(temp, QuadHalf, temp);
+	Sub(result, temp, result);
+	return result;
+}
+
+__float128 __float128::ACoth(__float128& v) //0.5*(log_e[1 + 1/x] - log_e[1 - 1/x])
+{
+	if (v.IsNaN()) return v;
+	if (v == QuadOne) return QuadPositiveInfinity;
+	if (v == QuadNegOne) return QuadNegativeInfinity;
+	if (QuadNegOne < v || v < QuadOne) return QuadNaN;
+	if (v.IsInfinite()) return QuadZero;
+	__float128 result;
+	__float128 temp;
+	__float128 invV;
+	Div(QuadOne, v, invV);
+	Add(QuadOne, invV, result);
+	Sub(QuadOne, invV, temp);
+	result = Ln(result);
+	Sub(result, Ln(temp), result);
+	Mul(QuadHalf, result, result);
+	return result;
+}
+
 void __float128::Fraction( __float128 &v, __float128 &result )
 {
 	int unbiasedExponent = v.GetBase2Exponent();
