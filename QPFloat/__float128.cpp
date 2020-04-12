@@ -1059,7 +1059,34 @@ __float128 __float128::ATan( __float128 &v )
 
 __float128 __float128::ATan2( __float128 &y, __float128 &x )
 {
-	__float128 tan = y / x;
+	__float128 tan;
+	if (x.IsNaN) return x;
+	if (y.IsNaN) return y;
+	if (y.IsZero()) //ATan2(+-0, +(anything but NaN)) = +-0 ; ATan2(+-0, -(anything but NaN)) = +-Pi
+	{
+		if (x.GetSign()) tan = QuadPi;
+		else tan = QuadZero;
+		tan.SetSign(y.GetSign());
+		return tan;
+	}
+	if (x.IsInfinite())
+	{
+		if (y.IsInfinite()) //ATan2(+-Inf, +Inf) = +-Pi/4 ; ATan2(+-Inf, -Inf) = +-3Pi/4
+		{
+			if (x.GetSign()) Mul(3.0, QuadQuarterPi, tan);
+			else tan = QuadSinQuarterPi;
+			tan.SetSign(y.GetSign());
+			return tan;
+		}
+		else // ATan2(+-(anything but Inf and NaN), +Inf) = +-0 ; Atan2(+-(anything but Inf and NaN), -Inf) = +-Pi
+		{
+			if (x.GetSign()) tan = QuadPi;
+			else tan = QuadZero;
+			tan.SetSign(y.GetSign());
+			return tan;
+		}
+	}
+	Div(y, x, tan);
 	__float128 partial = ATan(tan);
 	if (x.GetSign())
 	{
