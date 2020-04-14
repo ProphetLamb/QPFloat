@@ -374,26 +374,33 @@ void __float128::Div( const __float128 &a, const __float128 &b, __float128 &resu
 		ReadOutResult((ui32*)res, 128, resultExponent, aSign ^ bSign, result);
 }
 
-bool __float128::operator==( const __float128 &b ) const
+bool __float128::Equals(const __float128& a, const __float128& b)
 {
-	if (this->IsNaN() || b.IsNaN()) return false; //NaN =/= NaN
-	if (this->IsZero() && b.IsZero()) return true; //-0 = 0
-	ui64* aPtr = (ui64*)this->storage;
+	if (a.IsNaN() || b.IsNaN()) return false; //NaN =/= NaN
+	if (a.IsZero() && b.IsZero()) return true; //-0 = 0
+	ui64* aPtr = (ui64*)a.storage;
 	ui64* bPtr = (ui64*)b.storage;
 	if (*(aPtr++) != *(bPtr++)) return false;
 	if (*(aPtr) != *(bPtr)) return false;
 	return true;
 }
 
+bool __float128::EpsilonEquals(const __float128& a, const __float128& b)
+{
+	if (a.IsNaN() || b.IsNaN()) return false; //NaN =/= NaN
+	if (a.IsZero() && b.IsZero()) return true; //-0 = 0
+	if (a.GetBiasedExponent() - b.GetBiasedExponent() <= QuadEpsilon.GetBiasedExponent()) return true;
+	else return false;
+}
+
+bool __float128::operator==( const __float128 &b ) const
+{
+	return Equals(*this, b);
+}
+
 bool __float128::operator!=( const __float128 &b ) const
 {
-	if (this->IsNaN() || b.IsNaN()) return true; //NaN =/= NaN
-	if (this->IsZero() && b.IsZero()) return false;
-	ui64* aPtr = (ui64*)this->storage;
-	ui64* bPtr = (ui64*)b.storage;
-	if (*(aPtr++) != *(bPtr++)) return true;
-	if (*(aPtr) != *(bPtr)) return true;
-	return false;
+	return !Equals(*this, b);
 }
 
 bool __float128::operator>( const __float128 &b ) const

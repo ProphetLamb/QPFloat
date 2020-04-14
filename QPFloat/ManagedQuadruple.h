@@ -50,7 +50,6 @@ using namespace System::Runtime::InteropServices;
 	} \
 	private: \
 	static inline void x () { if (Enable##x##Exception) throw gcnew x##Exception(); }
-
 namespace System
 {
 	[Serializable]
@@ -112,6 +111,12 @@ namespace System
 //*/
 #endif
 		static void ReadOutResult(ui32* buffer, int headScanBackStart, int biasedExponentAtScanStart, bool sign, Quadruple %result);
+		FPU_EXCEPTION_DECLARATION(Overflow);
+		FPU_EXCEPTION_DECLARATION(Underflow);
+		FPU_EXCEPTION_DECLARATION(DivideByZero);
+		FPU_EXCEPTION_DECLARATION(Invalid);
+		FPU_EXCEPTION_DECLARATION(Inexact);
+	public:
 		static inline Quadruple FromData(byte* data)
 		{
 			Quadruple result;
@@ -119,12 +124,6 @@ namespace System
 			memcpy(ptr, data, 16);
 			return result;
 		}
-		FPU_EXCEPTION_DECLARATION(Overflow);
-		FPU_EXCEPTION_DECLARATION(Underflow);
-		FPU_EXCEPTION_DECLARATION(DivideByZero);
-		FPU_EXCEPTION_DECLARATION(Invalid);
-		FPU_EXCEPTION_DECLARATION(Inexact);
-	public:
 		property bool IsSigned
 		{
 			inline bool get()

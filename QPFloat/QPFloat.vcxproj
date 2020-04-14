@@ -223,6 +223,7 @@
     <ClInclude Include="Helpers.h" />
     <ClInclude Include="inline_array.h" />
     <ClInclude Include="ManagedQuadruple.h" />
+    <ClInclude Include="ManagedQuadrupleStringFactory.h" />
     <ClInclude Include="__float128.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Stdafx.h" />

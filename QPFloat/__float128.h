@@ -184,6 +184,8 @@ public:
 		__float128 temp = QuadOne;
 		Sub(v, temp, v);
 	}
+	static bool Equals(const __float128 &v1, const __float128 &v2);
+	static bool EpsilonEquals(const __float128 &v1, const __float128 &v2);
 	__float128 inline operator+(const __float128 &b) const
 	{
 		__float128 result;
