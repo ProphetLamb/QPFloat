@@ -1,8 +1,9 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
-################################################################################
+/Debug/
+*.vcxproj.user
 
-/.vs
-/Debug
-/x64/Release
-/QPFloat/x64/Release
+# VSCode
+.vscode/
+
+# Output
+out/
+
