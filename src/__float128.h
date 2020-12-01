@@ -252,7 +252,13 @@ public:
 	static void ToInt64(const __float128 &v, i64 &result);
 	__float128(i32 v);
 	static void ToInt32(const __float128 &v, i32 &result);
-	static bool EpsilonEquals(const __float128 &a, const __float128 &b);
+	static bool EpsilonEquals(const __float128 &a, const __float128 &b)
+	{
+		__float128 c;
+		Sub(a, b, c);
+		c.SetSign(false);
+		return c < QuadEpsilon;
+	}
 	static void Abs(const __float128 &v, __float128 &result);
 	static inline __float128 Abs(const __float128 &v)
 	{

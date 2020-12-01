@@ -64,7 +64,8 @@ namespace System
 	[System::Runtime::InteropServices::StructLayout(System::Runtime::InteropServices::LayoutKind::Explicit)]
 	[System::Serializable]
 	public value struct Quadruple 
-		: public IComparable<Quadruple>	//	AK
+		: public IComparable<Quadruple>,	//	AK
+		  public IEquatable<Quadruple>
 	{
 	private:
 		[System::Runtime::InteropServices::FieldOffset(0)]
@@ -401,6 +402,13 @@ namespace System
 		static Quadruple ACos(Quadruple v);
 		static Quadruple ATan(Quadruple v);
 		static Quadruple ATan2(Quadruple y, Quadruple x);
+		static inline bool EpsilonEquals(Quadruple a, Quadruple b)
+		{
+			Quadruple c;
+			Sub(a, b, c);
+			c.IsSigned = false;
+			return c < Epsilon;
+		}
 
 		virtual String^ ToString() override;
 		String^ ToString(String^ format);
@@ -414,8 +422,9 @@ namespace System
 			return v.IsSigned ? -1 : 1;
 		}
 
-		virtual int CompareTo(Quadruple x) override;	//	AK
+		virtual int CompareTo(Quadruple other) override;	//	AK
 
+		virtual bool Equals(Quadruple other) override;
 #include "constants.h"
 
 	};

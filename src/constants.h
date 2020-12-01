@@ -16,3 +16,5 @@ QUAD_CONSTANT(NegOne, negOne);
 QUAD_CONSTANT(Half, half);
 QUAD_CONSTANT(SinQuarterPi, sinQuarterPi);
 QUAD_CONSTANT(Epsilon, machEps);
+QUAD_CONSTANT(RoundOffError, roErr);
+QUAD_CONSTANT(MinimumSubnormal, subMin);

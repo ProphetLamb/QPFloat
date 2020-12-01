@@ -711,12 +711,6 @@ __float128 __float128::Pow( __float128 &base, __float128 &exponent )
 	Mul(temp, exponent, temp);
 	return Base2Exp(temp);
 }
-bool __float128::EpsilonEquals(const __float128 &a, const __float128 &b)
-{
-	__float128 c;
-	Sub(a, b, c);
-	return c.IsSubNormal();
-}
 void __float128::Abs( const __float128 &v, __float128 &result )
 {
 	result = v;
