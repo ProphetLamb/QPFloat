@@ -14,7 +14,7 @@ This file is part of QPFloat.
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
-	You should have received a copy of the GNU General Public License
+	You should have received left copy of the GNU General Public License
 	along with QPFloat.  If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -27,29 +27,16 @@ This file is part of QPFloat.
 #endif
 
 #define QUAD_CONSTANT(name, dataSource) __float128 Quad##name = __float128::FromData( dataSource );
-QUAD_CONSTANT(NaN, snan);
-QUAD_CONSTANT(Indefinite, ind);
-QUAD_CONSTANT(PositiveInfinity, posInf);
-QUAD_CONSTANT(NegativeInfinity, negInf);
-QUAD_CONSTANT(E, e);
-QUAD_CONSTANT(Log2E, log2e);
-QUAD_CONSTANT(Ln2, ln2);
-QUAD_CONSTANT(TwoPi, twoPi);
-QUAD_CONSTANT(Pi, pi);
-QUAD_CONSTANT(HalfPi, halfPi);
-QUAD_CONSTANT(QuarterPi, quarterPi);
-QUAD_CONSTANT(Zero, zero);
-QUAD_CONSTANT(NegZero, negZero);
-QUAD_CONSTANT(One, one);
-QUAD_CONSTANT(NegOne, negOne);
-QUAD_CONSTANT(Half, half);
-QUAD_CONSTANT(SinQuarterPi, sinQuarterPi);
+#include "constants.h"
 #undef QUAD_CONSTANT
+// Constants for CORDIC algorithm
+__float128 TrigonometricScaleFactor = ScaleFactorTrigonometric();
+__float128 HyperbolicScaleFactor = ScaleFactorHyperbolic();
 
 #define FPU_EXCEPTION_DEFINITION(x) \
 const char* x##ExceptionClass::what()const \
 { \
-	return "An " #x " occurred while performing a floating point operation."; \
+	return "An " #x " occurred while performing left floating point operation."; \
 } \
 x##ExceptionClass _##x##Exception;
 
@@ -88,30 +75,30 @@ void __float128::ReadOutResult( ui32 *buffer, int headScanBackStart, int biasedE
 	if (enableInexactException) if (ReverseBitScan((ui32*)buffer, 0, headScanBackStart + expInc - 112 - 1 + (currentExponent == 0 ? 1 : 0)) != -1) Inexact();
 }
 
-__float128 __float128::PartialLn( const __float128 &v )
+__float128 __float128::PartialLn( const __float128 &value )
 {
-	if (v == QuadOne) return QuadZero;
-	//todo: implement a faster algorithm - though this is only used for 1 <= x < 2 (hence partial), so it's not too bad
+	if (value == QuadOne) return QuadZero;
+	//todo: implement left faster algorithm - though this is only used for 1 <= x < 2 (hence partial), so it's not too bad
 	//http://en.wikipedia.org/wiki/Natural_logarithm#High_precision
-	if (v.IsNaN()) return v;
-	if (v == QuadPositiveInfinity) return v;
-	if (v.GetSign()) return QuadIndefinite;
+	if (value.IsNaN()) return value;
+	if (value == QuadPositiveInfinity) return value;
+	if (value.GetSign()) return QuadIndefinite;
 	__float128 temp1, temp2, temp3;
-	Abs(v, temp1);
+	Abs(value, temp1);
 	if (temp1 < QuadOne)
 	{
 		//return -(1 / this).Ln();
 		temp3 = QuadOne;
-		Div(temp3, v, temp1);
+		Div(temp3, value, temp1);
 		temp1 = Ln(temp1);
 		Negate(temp1);
 		return temp1;
 	}
 	//__float128 y = (-1 + this) / (1 + this);
 	temp3 = QuadNegOne;
-	Add(temp3, v, temp1);
+	Add(temp3, value, temp1);
 	temp3 = QuadOne;
-	Add(temp3, v, temp2);
+	Add(temp3, value, temp2);
 	__float128 y;
 	Div(temp1, temp2, y);
 
@@ -149,36 +136,36 @@ __float128 __float128::PartialLn( const __float128 &v )
 	return result;
 }
 
-void __float128::Add( const __float128 &a, const __float128 &b, __float128 &result )
+void __float128::Add( const __float128 &left, const __float128 &right, __float128 &result )
 {
 	//if either value is NaN, then result is NaN
-	if (a.IsNaN()) { result = a; return; }
-	if (b.IsNaN()) { result = b; return; }
+	if (left.IsNaN()) { result = left; return; }
+	if (right.IsNaN()) { result = right; return; }
 	//check for the special case of zero
-	if (a.IsZero())	{ result = b; return; }
-	if (b.IsZero())	{ result = a; return; }
+	if (left.IsZero())	{ result = right; return; }
+	if (right.IsZero())	{ result = left; return; }
 	//can only add values of the same sign. we do this check first so we don't repeat the other checks
-	bool aSign = a.GetSign();
-	bool bSign = b.GetSign();
-	if (aSign && !bSign) { __float128 temp; Negate(a, temp); Sub(b, temp, result); return; }
-	if (!aSign && bSign) { __float128 temp; Negate(b, temp); Sub(a, temp, result); return; }
+	bool aSign = left.GetSign();
+	bool bSign = right.GetSign();
+	if (aSign && !bSign) { __float128 temp; Negate(left, temp); Sub(right, temp, result); return; }
+	if (!aSign && bSign) { __float128 temp; Negate(right, temp); Sub(left, temp, result); return; }
 	//cache the exponents
-	int aExponent = a.GetBiasedExponent();
-	int bExponent = b.GetBiasedExponent();
+	int aExponent = left.GetBiasedExponent();
+	int bExponent = right.GetBiasedExponent();
 	//if the exponent is ExponentMask then it's either NaN or +-Infinity, but we already checked for NaN
 	//if both are infinite, return either NaN or +-Infinity. Infinity-Infinity=NaN, Infinity-(-Infinity)=Infinity
-	if (aExponent == QUAD_EXPONENT_MASK && bExponent == QUAD_EXPONENT_MASK) { result = a; return; } //already know signs are the same
+	if (aExponent == QUAD_EXPONENT_MASK && bExponent == QUAD_EXPONENT_MASK) { result = left; return; } //already know signs are the same
 	//if only one is infinite, then the other doesn't effect it
-	if (aExponent == QUAD_EXPONENT_MASK) { result = a; return; }
-	if (bExponent == QUAD_EXPONENT_MASK) { result = b; return; }
+	if (aExponent == QUAD_EXPONENT_MASK) { result = left; return; }
+	if (bExponent == QUAD_EXPONENT_MASK) { result = right; return; }
 	//see if the values can even affect each other
 	int exponentDistance = aExponent - bExponent;
-	if (exponentDistance > QUAD_SIGNIFICANT_BITS + 2) { result = a; return; }
-	if (exponentDistance < -QUAD_SIGNIFICANT_BITS - 2) { result = b;	return; }
+	if (exponentDistance > QUAD_SIGNIFICANT_BITS + 2) { result = left; return; }
+	if (exponentDistance < -QUAD_SIGNIFICANT_BITS - 2) { result = right;	return; }
 
 	//pin the data
-	const byte* aData = a.storage;
-	const byte* bData = b.storage;
+	const byte* aData = left.storage;
+	const byte* bData = right.storage;
 
 	//storage for performing the operations
 	//[0] and [16] are guard bits since we offset everything by 8
@@ -193,16 +180,16 @@ void __float128::Add( const __float128 &a, const __float128 &b, __float128 &resu
 	if (aExponent > bExponent) //keep the larger value in b1 since the result reads are based on its alignment
 	{
 		resultExponent = aExponent;
-		aSubNormal = a.IsSubNormal();
-		bSubNormal = b.IsSubNormal();
+		aSubNormal = left.IsSubNormal();
+		bSubNormal = right.IsSubNormal();
 		BitBlockTransfer(aData, 0, b1, 0 + 8 + (aSubNormal ? 1 : 0), 112);
 		BitWindowTransfer(bData, 0, 112, exponentDistance, b2, 0, 128, 0 + 8 + (bSubNormal ? 1 : 0));
 	}
 	else //if (bExponent >= aExponent)
 	{
 		resultExponent = bExponent;
-		aSubNormal = b.IsSubNormal();
-		bSubNormal = a.IsSubNormal();
+		aSubNormal = right.IsSubNormal();
+		bSubNormal = left.IsSubNormal();
 		BitBlockTransfer(bData, 0, b1, 0 + 8 + (bSubNormal ? 1 : 0), 112);
 		BitWindowTransfer(aData, 0, 112, -exponentDistance, b2, 0, 128, 0 + 8 + (aSubNormal ? 1 : 0));
 	}
@@ -213,26 +200,26 @@ void __float128::Add( const __float128 &a, const __float128 &b, __float128 &resu
 	ReadOutResult((ui32*)b1, 112 + 8 + 1, resultExponent + 1, aSign, result);
 }
 
-void __float128::Sub( const __float128 &a, const __float128 &b, __float128 &result )
+void __float128::Sub( const __float128 &left, const __float128 &right, __float128 &result )
 {
 	//see Add for notes on all these special cases, as they are nearly identical
-	if (a.IsNaN()) { result = a; return; }
-	if (b.IsNaN()) { result = b; return; }
-	if (b.IsZero())	{ result = a; return; }
-	if (a.IsZero())	{ Negate(b, result); return; }
-	bool aSign = a.GetSign();
-	if (aSign != b.GetSign()) { __float128 temp; Negate(b, temp); Add(a, temp, result); return; }
-	int aExponent = a.GetBiasedExponent();
-	int bExponent = b.GetBiasedExponent();
+	if (left.IsNaN()) { result = left; return; }
+	if (right.IsNaN()) { result = right; return; }
+	if (right.IsZero())	{ result = left; return; }
+	if (left.IsZero())	{ Negate(right, result); return; }
+	bool aSign = left.GetSign();
+	if (aSign != right.GetSign()) { __float128 temp; Negate(right, temp); Add(left, temp, result); return; }
+	int aExponent = left.GetBiasedExponent();
+	int bExponent = right.GetBiasedExponent();
 	if (aExponent == QUAD_EXPONENT_MASK && bExponent == QUAD_EXPONENT_MASK) { result = QuadIndefinite; Invalid(); return; } //already know signs are the same
-	if (aExponent == QUAD_EXPONENT_MASK) { result = a; return; }
-	if (bExponent == QUAD_EXPONENT_MASK) { Negate(b, result); return; }
+	if (aExponent == QUAD_EXPONENT_MASK) { result = left; return; }
+	if (bExponent == QUAD_EXPONENT_MASK) { Negate(right, result); return; }
 	int exponentDistance = aExponent - bExponent;
 	//exponentDistance early rejection doesn't work for subtraction (L.O. subs bubble up to H.O. bits)
 
 	//pin the data
-	const byte* aData = a.storage;
-	const byte* bData = b.storage;
+	const byte* aData = left.storage;
+	const byte* bData = right.storage;
 
 	//storage for the operations
 	byte buffer[64];
@@ -243,14 +230,14 @@ void __float128::Sub( const __float128 &a, const __float128 &b, __float128 &resu
 	int resultExponent;
 	bool negatedForValue; 
 	//we always subtract the lesser (absolute) value because it's simpler
-	//however, this means we need to negate the result if we do b-a
+	//however, this means we need to negate the result if we do right-left
 	bool aSubNormal, bSubNormal;
-	if ((a > b) ^ aSign)
+	if ((left > right) ^ aSign)
 	{
 		negatedForValue = false;
 		resultExponent = aExponent;
-		aSubNormal = a.IsSubNormal();
-		bSubNormal = b.IsSubNormal();
+		aSubNormal = left.IsSubNormal();
+		bSubNormal = right.IsSubNormal();
 		BitBlockTransfer(aData, 0, b1, 0 + 128 + (aSubNormal ? 1 : 0), 112);
 		BitWindowTransfer(bData, 0, 112, exponentDistance, b2, 0, 256, 0 + 128 + (bSubNormal ? 1 : 0));
 	}
@@ -258,8 +245,8 @@ void __float128::Sub( const __float128 &a, const __float128 &b, __float128 &resu
 	{
 		negatedForValue = true;
 		resultExponent = bExponent;
-		aSubNormal = b.IsSubNormal();
-		bSubNormal = a.IsSubNormal();
+		aSubNormal = right.IsSubNormal();
+		bSubNormal = left.IsSubNormal();
 		BitBlockTransfer(bData, 0, b1, 0 + 128 + (bSubNormal ? 1 : 0), 112);
 		BitWindowTransfer(aData, 0, 112, -exponentDistance, b2, 0, 256, 0 + 128 + (aSubNormal ? 1 : 0));
 	}
@@ -280,24 +267,24 @@ void __float128::Sub( const __float128 &a, const __float128 &b, __float128 &resu
 	ReadOutResult((ui32*)b1, 112 + 128, resultExponent, aSign ^ negatedForValue, result);
 }
 
-void __float128::Mul( const __float128 &a, const __float128 &b, __float128 &result )
+void __float128::Mul( const __float128 &left, const __float128 &right, __float128 &result )
 {
-	if (a.IsNaN()) { result = a; return; }
-	if (b.IsNaN()) { result = b; return; }
-	bool aZero = a.IsZero();
-	bool bZero = b.IsZero();
-	bool aInf = a.IsInfinite();
-	bool bInf = b.IsInfinite();
+	if (left.IsNaN()) { result = left; return; }
+	if (right.IsNaN()) { result = right; return; }
+	bool aZero = left.IsZero();
+	bool bZero = right.IsZero();
+	bool aInf = left.IsInfinite();
+	bool bInf = right.IsInfinite();
 	if (aZero && bInf) { result = QuadNaN; Invalid(); return; }
 	if (bZero && aInf) { result = QuadNaN; Invalid(); return; }
-	bool aSign = a.GetSign();
-	bool bSign = b.GetSign();
+	bool aSign = left.GetSign();
+	bool bSign = right.GetSign();
 	if (aInf || bInf) { result = (aSign ^ bSign) ? QuadNegativeInfinity : QuadPositiveInfinity; return; }
 	if (aZero || bZero) { result = 0; return; }
 	byte buffer[64];
 	memset(buffer, 0, 64);
-	int resultExponent = a.GetBiasedExponent() + b.GetBiasedExponent() - QUAD_EXPONENT_BIAS;
-	if (resultExponent >= QUAD_EXPONENT_MASK) //wont get any smaller (not even with a sub normal)
+	int resultExponent = left.GetBiasedExponent() + right.GetBiasedExponent() - QUAD_EXPONENT_BIAS;
+	if (resultExponent >= QUAD_EXPONENT_MASK) //wont get any smaller (not even with left sub normal)
 	{
 		result = (aSign ^ bSign) ? QuadNegativeInfinity : QuadPositiveInfinity;
 		Overflow();
@@ -306,10 +293,10 @@ void __float128::Mul( const __float128 &a, const __float128 &b, __float128 &resu
 	byte* b1 = buffer;
 	byte* b2 = buffer + 16;
 	byte* res = buffer + 32;
-	const byte* aPtr = a.storage;
-	const byte* bPtr = b.storage;
-	bool aSubNormal = a.IsSubNormal();
-	bool bSubNormal = b.IsSubNormal();
+	const byte* aPtr = left.storage;
+	const byte* bPtr = right.storage;
+	bool aSubNormal = left.IsSubNormal();
+	bool bSubNormal = right.IsSubNormal();
 	BitBlockTransfer(aPtr, 0, b1, aSubNormal ? 1 : 0, 112);
 	BitBlockTransfer(bPtr, 0, b2, bSubNormal ? 1 : 0, 112);
 	if (!aSubNormal) SetBit(b1, 112);
@@ -319,22 +306,22 @@ void __float128::Mul( const __float128 &a, const __float128 &b, __float128 &resu
 	ReadOutResult((ui32*)res, 112 * 2 + 2, resultExponent + 2,  aSign ^ bSign, result);
 }
 
-void __float128::Div( const __float128 &a, const __float128 &b, __float128 &result )
+void __float128::Div( const __float128 &left, const __float128 &right, __float128 &result )
 {
-	if (a.IsNaN()) { result = a; return; }
-	if (b.IsNaN()) { result = b; return; }
-	if (b.IsZero()) { result = QuadIndefinite; DivideByZero(); return; }
-	if (a.IsZero()) { result = a; return; }
-	int aExponent = a.GetBiasedExponent();
-	int bExponent = b.GetBiasedExponent();
+	if (left.IsNaN()) { result = left; return; }
+	if (right.IsNaN()) { result = right; return; }
+	if (right.IsZero()) { result = QuadIndefinite; DivideByZero(); return; }
+	if (left.IsZero()) { result = left; return; }
+	int aExponent = left.GetBiasedExponent();
+	int bExponent = right.GetBiasedExponent();
 
 	if (aExponent == QUAD_EXPONENT_MASK)
 	{
 		if (bExponent == QUAD_EXPONENT_MASK) { result = QuadIndefinite; Invalid(); return; }
-		else { result = a; return; }
+		else { result = left; return; }
 	}
-	bool aSign = a.GetSign();
-	bool bSign = b.GetSign();
+	bool aSign = left.GetSign();
+	bool bSign = right.GetSign();
 	if (bExponent == QUAD_EXPONENT_MASK)
 	{
 		result = (aSign ^ bSign) ? QuadZero : QuadNegZero;
@@ -352,10 +339,10 @@ void __float128::Div( const __float128 &a, const __float128 &b, __float128 &resu
 	byte* b2 = buffer;
 	byte* b1 = buffer + 16;
 	byte* res = buffer + 48;
-	const byte* aPtr = a.storage;
-	const byte* bPtr = b.storage;
-	bool aIsSubNormal = a.IsSubNormal();
-	bool bIsSubNormal = b.IsSubNormal();
+	const byte* aPtr = left.storage;
+	const byte* bPtr = right.storage;
+	bool aIsSubNormal = left.IsSubNormal();
+	bool bIsSubNormal = right.IsSubNormal();
 	BitBlockTransfer(aPtr, 0, b1 + 16, aIsSubNormal ? 1 : 0, 112);
 	BitBlockTransfer(bPtr, 0, b2, bIsSubNormal ? 1 : 0, 112);
 	if (!aIsSubNormal) SetBit(b1 + 16, 112);
@@ -372,87 +359,47 @@ void __float128::Div( const __float128 &a, const __float128 &b, __float128 &resu
 	else
 		ReadOutResult((ui32*)res, 128, resultExponent, aSign ^ bSign, result);
 }
-
-bool __float128::operator==( const __float128 &b ) const
+bool __float128::Equals(const __float128 &left, const __float128 &right)
 {
-	if (this->IsNaN() || b.IsNaN()) return false; //NaN =/= NaN
-	if (this->IsZero() && b.IsZero()) return true; //-0 = 0
-	ui64* aPtr = (ui64*)this->storage;
-	ui64* bPtr = (ui64*)b.storage;
-	if (*(aPtr++) != *(bPtr++)) return false;
-	if (*(aPtr) != *(bPtr)) return false;
+	if (left.IsNaN() || right.IsNaN()) return false; //NaN =/= NaN
+	if (left.IsZero() && right.IsZero()) return true; //-0 = 0
+	ui64* lPtr = (ui64*)left.storage;
+	ui64* rPtr = (ui64*)right.storage;
+	if (*(lPtr++) != *(rPtr++)) return false;
+	if (*(lPtr) != *(rPtr)) return false;
 	return true;
 }
-
-bool __float128::operator!=( const __float128 &b ) const
+bool __float128::EpsilonEquals(const __float128 &left, const __float128 &right)
 {
-	if (this->IsNaN() || b.IsNaN()) return true; //NaN =/= NaN
-	if (this->IsZero() && b.IsZero()) return false;
-	ui64* aPtr = (ui64*)this->storage;
-	ui64* bPtr = (ui64*)b.storage;
-	if (*(aPtr++) != *(bPtr++)) return true;
-	if (*(aPtr) != *(bPtr)) return true;
-	return false;
+	__float128 c;
+	Sub(left, right, c);
+	c.SetSign(false);
+	return c < QuadEpsilon;
 }
-
-bool __float128::operator>( const __float128 &b ) const
+i32 __float128::Compare(const __float128 &left, const __float128 &right)
 {
-	if (this->IsNaN() || b.IsNaN()) return false;
-	bool aSign = this->GetSign();
-	if (this->IsZero()) return b.GetSign();
-	if (b.IsZero()) return !aSign;
-	if (aSign != b.GetSign()) return !aSign;
-	ui16 aExponent = this->GetBiasedExponent();
-	ui16 bExponent = b.GetBiasedExponent();
-	if (aExponent < bExponent)
-		return aSign;
-	else if (aExponent > bExponent)
-		return !aSign;
-	else
+	if (left.IsNaN() && right.IsNaN() || left.IsZero() && right.IsZero())
+		return true;
+	i32 cmpExp = left.GetBiasedExponent() - right.GetBiasedExponent();
+	if (cmpExp == 0)
 	{
-		const byte* aPtr = this->storage;
-		const byte* bPtr = b.storage;
+		const byte* lPtr = left.storage;
+		const byte* rPtr = right.storage;
 		byte temp[32];
 		memset(temp, 0, 32);
-		BitBlockTransfer(aPtr, 0, temp, 0, 112);
-		BitBlockTransfer(bPtr, 0, temp + 16, 0, 112);
-		i32 cmp;
-		IntBlockCompare(&cmp, (ui32*)temp, (ui32*)(temp+16), 4);
-		return cmp == (aSign ? -1 : 1);
+		BitBlockTransfer(lPtr, 0, temp, 0, 112);
+		BitBlockTransfer(rPtr, 0, temp + 16, 0, 112);
+		i32 cmpMan;
+		IntBlockCompare(&cmpMan, (ui32*)temp, (ui32*)(temp+16), 4);
+		return cmpMan;
 	}
+	return cmpExp < 0 ? -1 : 1;
 }
 
-bool __float128::operator<( const __float128 &b ) const
-{
-	if (this->IsNaN() || b.IsNaN()) return false;
-	bool aSign = this->GetSign();
-	if (this->IsZero()) return !b.GetSign();
-	if (b.IsZero()) return aSign;
-	if (aSign != b.GetSign()) return aSign;
-	ui16 aExponent = this->GetBiasedExponent();
-	ui16 bExponent = b.GetBiasedExponent();
-	if (aExponent < bExponent)
-		return !aSign;
-	else if (aExponent > bExponent)
-		return aSign;
-	else
-	{
-		const byte* aPtr = this->storage;
-		const byte* bPtr = b.storage;
-		byte temp[32];
-		memset(temp, 0, 32);
-		BitBlockTransfer(aPtr, 0, temp, 0, 112);
-		BitBlockTransfer(bPtr, 0, temp + 16, 0, 112);
-		i32 cmp;
-		IntBlockCompare(&cmp, (ui32*)temp, (ui32*)(temp+16), 4);
-		return cmp == (aSign ? 1 : -1);
-	}
-}
-
-__float128::__float128(double v)
+__float128::__float128(double value)
 {
 	DoubleDecomposition d;
-	d.value = v;
+	d.value = value;
 	int checkExponent = d.GetBiasedExponent();
 	if (checkExponent == 0x7FF)
 	{
@@ -463,26 +410,26 @@ __float128::__float128(double v)
 	SetSign(d.GetSign());
 	d.GetMantissa(storage, 14);
 	if (checkExponent == 0)
-		//it's a non-normalized value
+		//it's left non-normalized value
 		SetBiasedExponent(0);
 	else
 		SetBase2Exponent(d.GetUnbiasedExponent());
 }
 
-void __float128::ToDouble( const __float128 &v, double &result)
+void __float128::ToDouble(const __float128 &value, double &result)
 {
 	DoubleDecomposition _result;
 	_result.value = 0;
-	_result.SetSign(v.GetSign());
-	_result.SetUnbiasedExponent(v.GetBase2Exponent());
-	_result.SetMantissa(v.storage, 14); //setting the mantissa will check for rounding and update exponent if necessary
+	_result.SetSign(value.GetSign());
+	_result.SetUnbiasedExponent(value.GetBase2Exponent());
+	_result.SetMantissa(value.storage, 14); //setting the mantissa will check for rounding and update exponent if necessary
 	result = _result.value;
 }
 
-void __float128::ToInt64( const __float128 &v, i64 &result)
+void __float128::ToInt64(const __float128 &value, i64 &result)
 {
-	bool sign = v.GetSign();
-	int exp = v.GetBase2Exponent();
+	bool sign = value.GetSign();
+	int exp = value.GetBase2Exponent();
 	if (exp <= -1)
 	{
 		result = sign ? -1 : 0;
@@ -496,7 +443,7 @@ void __float128::ToInt64( const __float128 &v, i64 &result)
 	else
 	{
 		result = 0;
-		const byte* ptr = v.storage;
+		const byte* ptr = value.storage;
 		BitWindowTransfer(ptr, 0, 112, 112 - exp, &result, 0, 64, 0);
 		SetBit(&result, exp);
 		if (sign)
@@ -510,10 +457,10 @@ void __float128::ToInt64( const __float128 &v, i64 &result)
 	}
 }
 
-void __float128::ToInt32( const __float128 &v, i32 &result)
+void __float128::ToInt32(const __float128 &value, i32 &result)
 {
-	bool sign = v.GetSign();
-	int exp = v.GetBase2Exponent();
+	bool sign = value.GetSign();
+	int exp = value.GetBase2Exponent();
 	if (exp <= -1)
 	{
 		result = sign ? -1 : 0;
@@ -527,7 +474,7 @@ void __float128::ToInt32( const __float128 &v, i32 &result)
 	else
 	{
 		result = 0;
-		const byte* ptr = v.storage;
+		const byte* ptr = value.storage;
 		BitWindowTransfer(ptr, 0, 112, 112 - exp, &result, 0, 32, 0);
 		SetBit(&result, exp);
 		if (sign)
@@ -541,36 +488,36 @@ void __float128::ToInt32( const __float128 &v, i32 &result)
 	}
 }
 
-__float128::__float128(i32 v)
+__float128::__float128(i32 value)
 {
 	byte* ptr = storage;
 	memset(ptr, 0, 16);
-	if (v == 0)
+	if (value == 0)
 	{
 		return;
 	}
-	bool sign = v < 0;
-	if (sign) v = -v;
+	bool sign = value < 0;
+	if (sign) value = -value;
 	SetSign(sign);
-	i32 firstBit = ReverseBitScan((ui32*)&v, 1, 30);
+	i32 firstBit = ReverseBitScan((ui32*)&value, 1, 30);
 	SetBase2Exponent(firstBit);
-	BitWindowTransfer(&v, 0, 32, firstBit, ptr, 0, 112, 112);
+	BitWindowTransfer(&value, 0, 32, firstBit, ptr, 0, 112, 112);
 }
 
-__float128::__float128( i64 v )
+__float128::__float128(i64 value)
 {
 	byte* ptr = storage;
 	memset(ptr, 0, 16);
-	if (v == 0)
+	if (value == 0)
 	{
 		return;
 	}
-	bool sign = v < 0;
-	if (sign) v = -v;
+	bool sign = value < 0;
+	if (sign) value = -value;
 	SetSign(sign);
-	i32 firstBit = ReverseBitScan((ui32*)&v, 2, 62);
+	i32 firstBit = ReverseBitScan((ui32*)&value, 2, 62);
 	SetBase2Exponent(firstBit);
-	BitWindowTransfer(&v, 0, 64, firstBit, ptr, 0, 112, 112);
+	BitWindowTransfer(&value, 0, 64, firstBit, ptr, 0, 112, 112);
 }
 
 __float128::__float128()
@@ -578,35 +525,35 @@ __float128::__float128()
 	*this = QuadZero;
 }
 
-__float128 __float128::Ln( __float128 &v )
+__float128 __float128::Ln(const __float128 &value)
 {
-	return Log2(v) * QuadLn2;
+	return Log2(value) * QuadLn2;
 }
 
-__float128 __float128::Log2( __float128 &v )
+__float128 __float128::Log2(const __float128 &value)
 {
-	if (v.IsZero()) { Invalid(); return QuadNaN; }
-	if (v.IsNaN()) return v;
-	__float128 baseTwoMantissa = v;
+	if (value.IsZero()) { Invalid(); return QuadNaN; }
+	if (value.IsNaN()) return value;
+	__float128 baseTwoMantissa = value;
 	baseTwoMantissa.SetBase2Exponent(0);
 	__float128 baseTwoExponent;
-	baseTwoExponent = v.GetBase2Exponent();
+	baseTwoExponent = value.GetBase2Exponent();
 	__float128 base2LogOfMantissa = PartialLn(baseTwoMantissa) * QuadLog2E;
 	return baseTwoExponent + base2LogOfMantissa;
 }
 
-__float128 __float128::PartialExp( const __float128 &v )
+__float128 __float128::PartialExp(const __float128 &value)
 {
 	double checkV;
-	__float128::ToDouble(v, checkV);
-	if (v.IsNaN()) return v;
-	if (v.IsZero()) return 1;
-	if (v == QuadPositiveInfinity) return v;
-	if (v == QuadNegativeInfinity) return 0;
+	__float128::ToDouble(value, checkV);
+	if (value.IsNaN()) return value;
+	if (value.IsZero()) return 1;
+	if (value == QuadPositiveInfinity) return value;
+	if (value == QuadNegativeInfinity) return 0;
 	__float128 result = 1;
 	__float128 factorial = 1;
 	int iteration = 1;
-	__float128 x = v;
+	__float128 x = value;
 	bool affecting = true;
 	while (affecting)
 	{
@@ -618,7 +565,7 @@ __float128 __float128::PartialExp( const __float128 &v )
 			iteration++;
 			__float128 temp1 = iteration;
 			Mul(factorial, temp1, factorial);
-			Mul(x, v, x);
+			Mul(x, value, x);
 		}
 		else
 		{
@@ -647,24 +594,24 @@ __float128 __float128::Base2Exp(i32 exponent)
 	}
 }
 
-__float128 __float128::Base2Exp (__float128 &v)
+__float128 __float128::Base2Exp (const __float128 &value)
 {
 	i32 integerPortion;
 	__float128 fractionalPortion;
-	if (v > QuadZero)
+	if (value > QuadZero)
 	{
 		__float128 temp;
-		__float128::Floor(v, temp);
+		__float128::Floor(value, temp);
 		ToInt32(temp, integerPortion);
 	}
 	else
 	{
 		__float128 temp;
-		__float128::Ceiling(v, temp);
+		__float128::Ceiling(value, temp);
 		ToInt32(temp, integerPortion);
 	}
 	__float128 temp = (__float128)integerPortion;
-	fractionalPortion = v - temp;
+	fractionalPortion = value - temp;
 	__float128 fromIntegerPortion = Base2Exp(integerPortion); //this may result in Infinity, subnormal, or zero
 	if (fromIntegerPortion.IsInfinite() || fromIntegerPortion.IsZero()) return fromIntegerPortion;
 	Mul(fractionalPortion, QuadLn2, fractionalPortion);
@@ -672,13 +619,13 @@ __float128 __float128::Base2Exp (__float128 &v)
 	return fromIntegerPortion * fromFractionPortion;
 }
 
-__float128 __float128::Exp(__float128 &v)
+__float128 __float128::Exp(const __float128 &value)
 {
 	__float128 temp;
-	Mul(v, QuadLog2E, temp);
+	Mul(value, QuadLog2E, temp);
 	return Base2Exp(temp);
 }
-__float128 __float128::Pow( __float128 &base, __float128 &exponent )
+__float128 __float128::Pow(const __float128 &base, const __float128 &exponent )
 {
 	if (base.IsNaN()) return base;
 	if (exponent.IsNaN()) return exponent;
@@ -711,26 +658,26 @@ __float128 __float128::Pow( __float128 &base, __float128 &exponent )
 	Mul(temp, exponent, temp);
 	return Base2Exp(temp);
 }
-void __float128::Abs( const __float128 &v, __float128 &result )
+void __float128::Abs( const __float128 &value, __float128 &result )
 {
-	result = v;
+	result = value;
 	result.SetSign(false);
 }
-void __float128::Max( const __float128 &a, const __float128 &b, __float128 &result )
+void __float128::Max( const __float128 &left, const __float128 &right, __float128 &result )
 {
-	result = a;
-	if (!(b < a)) result = b; //by doing !(b < a) we also check if b is NaN
+	result = left;
+	if (!(right < left)) result = right; //by doing !(right < left) we also check if right is NaN
 }
-void __float128::Min( const __float128 &a, const __float128 &b, __float128 &result )
+void __float128::Min( const __float128 &left, const __float128 &right, __float128 &result )
 {
-	result = a;
-	if (!(b > a)) result = b; //by doing !(b > a) we also check if b is NaN
+	result = left;
+	if (!(right > left)) result = right; //by doing !(right > left) we also check if right is NaN
 }
-__float128 __float128::Sin( __float128 &v )
+__float128 __float128::Sin(const __float128 &value )
 {
-	if (v.IsNaN()) return v;
+	if (value.IsNaN()) return value;
 	//first wrap to -2Pi < x < 2Pi
-	__float128 temp = v + QuadHalfPi;
+	__float128 temp = value + QuadHalfPi;
 	Div(temp, QuadTwoPi, temp);
 	temp = Fraction(temp);
 	if (temp.GetSign()) Add(temp, QuadOne, temp);
@@ -773,21 +720,21 @@ __float128 __float128::Sin( __float128 &v )
 	return result;
 }
 
-__float128 __float128::Cos( __float128 &v )
+__float128 __float128::Cos(const __float128 &value )
 {
-	__float128 temp = v + QuadHalfPi;
+	__float128 temp = value + QuadHalfPi;
 	return Sin(temp);
 }
 
-void __float128::SinCos( __float128 &v, __float128 &resultSin, __float128 &resultCos )
+void __float128::SinCos(const __float128 &value, __float128 &resultSin, __float128 &resultCos)
 {
-	if (v.IsNaN())
+	if (value.IsNaN())
 	{
 		resultCos = resultSin = QuadNaN;
 	}
 	//first wrap to -2Pi < x < 2Pi
-	__float128 tempSin = v + QuadHalfPi;
-	__float128 tempCos = v + QuadPi;
+	__float128 tempSin = value + QuadHalfPi;
+	__float128 tempCos = value + QuadPi;
 	Div(tempSin, QuadTwoPi, tempSin);
 	Div(tempCos, QuadTwoPi, tempCos);
 	tempSin = Fraction(tempSin);
@@ -860,25 +807,25 @@ void __float128::SinCos( __float128 &v, __float128 &resultSin, __float128 &resul
 	if (negateCos) Negate(resultCos);
 }
 
-__float128 __float128::Tan( __float128 &v )
+__float128 __float128::Tan(const __float128 &value )
 {
 	__float128 sin, cos, tan;
-	SinCos(v, sin, cos);
+	SinCos(value, sin, cos);
 	Div(sin, cos, tan);
 	return tan;
 }
 
-__float128 __float128::ASin( __float128 &v )
+__float128 __float128::ASin(const __float128 &value )
 {
-	if (v.IsNaN()) return v;
-	if (v > QuadOne) return QuadNaN;
-	if (v < QuadNegOne) return QuadNaN;
-	if (Abs(v) > QuadSinQuarterPi)
+	if (value.IsNaN()) return value;
+	if (value > QuadOne) return QuadNaN;
+	if (value < QuadNegOne) return QuadNaN;
+	if (Abs(value) > QuadSinQuarterPi)
 	{
 		__float128 temp;
-		Mul(v, v, temp);
+		Mul(value, value, temp);
 		//double dTemp = temp.ToDouble();
-		bool negate = v.GetSign();
+		bool negate = value.GetSign();
 		Sub(QuadOne, temp, temp);
 		//dTemp = temp.ToDouble();
 		temp = Pow(temp, QuadHalf);
@@ -898,9 +845,9 @@ __float128 __float128::ASin( __float128 &v )
 	__float128 fourPowITimesIFactorialSquared = 1;
 	__float128 i2Factorial = 1;
 	__float128 i2PlusOne = 1;
-	__float128 vPowI2PlusOne = v;
+	__float128 vPowI2PlusOne = value;
 	__float128 vSquared;
-	Mul(v, v, vSquared);
+	Mul(value, value, vSquared);
 
 	bool affecting = true;
 	while (affecting)
@@ -950,78 +897,78 @@ __float128 __float128::ASin( __float128 &v )
 	return result;
 }
 
-__float128 __float128::ACos( __float128 &v )
+__float128 __float128::ACos(const __float128 &value )
 {
-	if (v.IsNaN()) return v;
-	if (v > QuadOne) return QuadNaN;
-	if (v < QuadNegOne) return QuadNaN;
-	if (v.GetSign())
+	if (value.IsNaN()) return value;
+	if (value > QuadOne) return QuadNaN;
+	if (value < QuadNegOne) return QuadNaN;
+	if (value.GetSign())
 	{
 		__float128 temp1;
 		__float128 temp2;
 		Negate(QuadHalfPi, temp1);
-		temp2 = ASin(v);
+		temp2 = ASin(value);
 		Sub(temp1, temp2, temp1);
 		return temp1;
-		//return (-QuadHalfPi) - ASin(v);
+		//return (-QuadHalfPi) - ASin(value);
 	}
 	else
 	{
 		__float128 temp;
-		temp = ASin(v);
+		temp = ASin(value);
 		Sub(QuadHalfPi, temp, temp);
 		return temp;
-		//return QuadHalfPi - ASin(v);
+		//return QuadHalfPi - ASin(value);
 	}
 }
 
-__float128 __float128::ATan( __float128 &v )
+__float128 __float128::ATan(const __float128 &value )
 {
-	if (v.IsNaN()) return v;
-	if (v.IsInfinite())
+	if (value.IsNaN()) return value;
+	if (value.IsInfinite())
 	{
-		if (v.GetSign())
+		if (value.GetSign())
 			return -QuadHalfPi;
 		else
 			return QuadHalfPi;
 	}
-	if (v.IsZero()) return QuadZero;
-	if (v.GetSign())
+	if (value.IsZero()) return QuadZero;
+	if (value.GetSign())
 	{
 		__float128 temp;
-		Negate(v, temp);
+		Negate(value, temp);
 		temp = ATan(temp);
 		Negate(temp);
 		return temp;
 	}
-	if (v > QuadOne)
+	if (value > QuadOne)
 	{
 		__float128 temp;
-		Div(QuadOne, v, temp);
+		Div(QuadOne, value, temp);
 		temp = ATan(temp);
 		Sub(QuadHalfPi, temp, temp);
 		return temp;
 	}
-	if (v > QuadHalf)
+	if (value > QuadHalf)
 	{
 		//convergence is very slow for values near one, so we are going to compute from arcsin
 		//sin = tan / sqrt((1 + tan^2))
 		__float128 temp;
-		Mul(v, v, temp);
+		Mul(value, value, temp);
 		Add(temp, QuadOne, temp);
 		temp = Pow(temp, QuadHalf);
 		__float128 sin;
-		Div(v, temp, sin);
+		Div(value, temp, sin);
 		return ASin(sin);
 	}
 	__float128 result = QuadZero;
 	__float128 Two = 2;
 	int iIteration = 0;
 	__float128 i2PlusOne = 1;
-	__float128 vPowI2PlusOne = v;
+	__float128 vPowI2PlusOne = value;
 	__float128 vSquared;
 	bool signFlip = false;
-	Mul(v, v, vSquared);
+	Mul(value, value, vSquared);
 
 	bool affecting = true;
 	while (affecting)
@@ -1057,29 +1004,191 @@ __float128 __float128::ATan( __float128 &v )
 	return result;
 }
 
-__float128 __float128::ATan2( __float128 &y, __float128 &x )
+__float128 __float128::ATan2(const __float128 &y, const __float128 &x )
 {
 	__float128 tan = y / x;
 	__float128 partial = ATan(tan);
 	if (x.GetSign())
 	{
-		if (y.GetSign())
-			return partial - QuadPi;
-		else
-			return partial + QuadPi;
+		__float128 temp = QuadPi;
+		__float128::CopySign(temp, y);
+		return partial + temp;
 	}
 	else
 		return partial;
 }
 
-void __float128::Fraction( __float128 &v, __float128 &result )
+void __float128::SinhCosh(const __float128 &value, __float128 &resultSin, __float128 &resultCos)
 {
-	int unbiasedExponent = v.GetBase2Exponent();
+	__float128 z = value;
+	resultCos = QuadOne;
+	resultSin = QuadZero;
+	Cordic(resultCos, resultSin, z, 1, 4, 52);
+	__float128::Div(resultCos, HyperbolicScaleFactor, resultCos);
+	__float128::Div(resultSin, HyperbolicScaleFactor, resultSin);
+}
+
+__float128 __float128::Tanh(const __float128 &value)
+{
+	__float128 x, y;
+	__float128::SinhCosh(value, y, x);
+	__float128::Div(y, x, x);
+	return x;
+}
+
+__float128 __float128::ATanh2(const __float128 &y, const __float128 &x)
+{
+	__float128 resultX = x, resultY = y, z = 0;
+	Cordic(resultX, resultY, z, 1, 4, 36);
+	__float128::Div(resultX, HyperbolicScaleFactor, resultX);
+	return resultX;
+}
+__float128 ScaleFactorTrigonometric()
+{
+	__float128 result = QuadOne;
+	__float128 two = 2;
+	int iteration = 0;
+	bool affecting = true;
+	while (affecting)
+	{
+		__float128 step = __float128::Base2Exp(-iteration); // 2^-i
+		if (!step.IsZero() && result.GetBase2Exponent() - step.GetBase2Exponent() <= QUAD_SIGNIFICANT_BITS)
+		{
+			// increment = sqrt(1+(2^-i)^2)
+			// result *= increment
+			__float128 increment = __float128::Pow(step, two);
+			__float128::Add(increment, QuadOne, increment);
+			__float128::Mul(result, __float128::Pow(increment, QuadHalf), result);
+		}
+		else
+		{
+			affecting = false;
+		}
+		if (iteration >= 300 || result.IsZero())
+			return result;		
+		iteration++;
+	}
+	return result;
+}
+
+__float128 ScaleFactorHyperbolic()
+{
+	__float128 result = QuadOne;
+	__float128 two = 2;
+	int iteration = 1;
+	bool affecting = true;
+	while (affecting)
+	{
+		__float128 step = __float128::Base2Exp(-iteration); // 2^-i
+		if (!step.IsZero() && result.GetBase2Exponent() - step.GetBase2Exponent() <= QUAD_SIGNIFICANT_BITS)
+		{
+			// increment = sqrt(1-(2^-i)^2)
+			// result *= increment
+			__float128 increment = __float128::Pow(step, two);
+			__float128::Negate(increment);
+			__float128::Add(increment, QuadOne, increment);
+			__float128::Mul(result, __float128::Pow(increment, QuadHalf), result);
+		}
+		else
+		{
+			affecting = false;
+		}
+		if (iteration > 300 || result.IsZero())
+			return result;
+		iteration++;
+	}
+	return result;
+}
+
+// Gamma function utility
+__float128 FactorialKPlusHalf(int k) // (n+0.5)!
+{
+	// 0.5! = 3/4*sqrt(pi)
+	__float128 result = __float128::Pow(QuadPi,QuadHalf);
+	__float128::Mul(3, result, result);
+	__float128::Div(result, 4, result);
+
+	for(__float128 n = k << 1; n >= 1; n--, n--) // for(n=k*2; n>=1; n-=2)
+	{
+		__float128::Mul(n >> 1, result, result); // result *= n/2
+	}
+	return result;
+}
+
+__float128 GodfreyCoefficientMatrix(int n, int m)
+{
+	if ((n == 1 && m == 1) || (n == 2 && m == 2))
+		return QuadOne;
+	if (n > 1)
+	{
+		if (m == 1) // C_n+1,1 = - C_n-1,1 for n = 2,3,4,...
+		{
+			return -GodfreyCoefficientMatrix(n-2, 1);
+		}
+		if (n == m) // C_n+1,n+1 = 2*C_n,n for n = 2,3,4,...
+		{
+			return GodfreyCoefficientMatrix(n-1, n-1) << 1;
+		}
+		else // C_n+1,m+1 = 2*C_n,m - C_n-1,m+1 for n > m = 1,2,3,...
+		{
+			__float128 temp1 = GodfreyCoefficientMatrix(n-1, m-1) << 1;
+			__float128::Sub(temp1, GodfreyCoefficientMatrix(n-2, m), temp1);
+			return temp1;
+		}		
+	}
+	return QuadNaN;
+}
+
+__float128 LanczosParameter(int k, int g)
+{
+	__float128 result = QuadZero;
+	for (int l = 0; l < k; l++)
+	{
+		// left=l+f+.5
+		__float128 left = g;
+		__float128::Add(left, l, left);
+		__float128::Add(left, QuadHalf, left);
+		// e^left
+		__float128 temp1 = __float128::Exp(left);
+		// left^-left
+		__float128 temp2 = left;
+		__float128::Negate(temp2);
+		temp2 = __float128::Pow(left, temp2);
+		// (l-0.5)!
+		__float128 temp3 = FactorialKPlusHalf(l-1);
+		// C_2k+1,2l+1
+		__float128 temp4 = GodfreyCoefficientMatrix(2*k+1, 2*l+1);
+		
+		__float128::Mul(temp1, temp2, temp1);
+		__float128::Mul(temp1, temp3, temp1);
+		__float128::Mul(temp1, temp4, temp1);
+		result += temp1;
+	}
+	// result*sqrt(2)/pi
+	__float128 temp5 = 2;
+	temp5 = __float128::Pow(temp5, QuadHalf);
+	__float128::Div(temp5, QuadPi, temp5);
+	result *= temp5;
+	return result;
+}
+
+__float128 __float128::Gamma(const __float128 &value)
+{
+	// if (value < QuadHalf)
+	// {
+	// 	return QuadPi / (__float128::Sin(QuadPi*value) * Gamma(1 - z));
+	// }
+	return QuadZero;
+}
+
+void __float128::Fraction(const __float128 &value, __float128 &result )
+{
+	int unbiasedExponent = value.GetBase2Exponent();
 	if (unbiasedExponent < 0) 
-		result = v;
+		result = value;
 	else
 	{
-		result = v;
+		result = value;
 		byte* data = result.storage;
 		byte buffer[14];
 		memset(buffer, 0, 14);
@@ -1094,50 +1203,50 @@ void __float128::Fraction( __float128 &v, __float128 &result )
 	}
 }
 
-void __float128::Ceiling( __float128 &v, __float128 &result )
+void __float128::Ceiling(const __float128 &value, __float128 &result)
 {
-	int unbiasedExponent = v.GetBase2Exponent();
-	if (unbiasedExponent == QUAD_EXPONENT_MAX) result = v; //NaN, +inf, -inf
+	int unbiasedExponent = value.GetBase2Exponent();
+	if (unbiasedExponent == QUAD_EXPONENT_MAX) result = value; //NaN, +inf, -inf
 	else if (unbiasedExponent < 0)
 	{
-		if (v.GetSign())
+		if (value.GetSign())
 			result = FromData(zero);
 		else
 			result = FromData(one);
 	}
 	else
 	{
-		if (unbiasedExponent >= 112) { result = v; return; }
-		result = v;
+		if (unbiasedExponent >= 112) { result = value; return; }
+		result = value;
 		int bitsToErase = 112 - unbiasedExponent;
 		ClearBlock(result.storage, 0, bitsToErase);
-		if (result != v)
+		if (result != value)
 		{
 			if (!result.GetSign()) ++result;
 		}
 	}
 }
 
-__float128 __float128::Log( __float128 &v, __float128 &base )
+__float128 __float128::Log(const __float128 &value, const __float128 &base)
 {
 	__float128 temp1, temp2;
-	temp1 = Log2(v);
+	temp1 = Log2(value);
 	temp2 = Log2(base);
 	Div(temp1, temp2, temp1);
 	return temp1;
-	//return Log2(v) / Log2(base);
+	//return Log2(value) / Log2(base);
 }
 
-void __float128::Round( __float128 &v, __float128 &result )
+void __float128::Round(const __float128 &value, __float128 &result)
 {
-	int unbiasedExponent = v.GetBase2Exponent();
-	if (unbiasedExponent == QUAD_EXPONENT_MAX) result = v; //NaN, +inf, -inf
+	int unbiasedExponent = value.GetBase2Exponent();
+	if (unbiasedExponent == QUAD_EXPONENT_MAX) result = value; //NaN, +inf, -inf
 	else if (unbiasedExponent < -1) result = QuadZero;
-	else if (unbiasedExponent == -1) result = v.GetSign() ? QuadNegOne : QuadOne;
-	else if (unbiasedExponent >= 112) result = v;
+	else if (unbiasedExponent == -1) result = value.GetSign() ? QuadNegOne : QuadOne;
+	else if (unbiasedExponent >= 112) result = value;
 	else
 	{
-		result = v;
+		result = value;
 		bool roundUp = ReadBit(result.storage, 111 - unbiasedExponent);
 		int bitsToErase = 112 - unbiasedExponent;
 		ClearBlock(result.storage, 0, bitsToErase);
@@ -1145,26 +1254,26 @@ void __float128::Round( __float128 &v, __float128 &result )
 	}
 }
 
-void __float128::Truncate( __float128 &v, ui64 &result )
+void __float128::Truncate(const __float128 &value, ui64 &result )
 {
-	int exp = v.GetBase2Exponent();
+	int exp = value.GetBase2Exponent();
 	if (exp < 0) { result = 0; }
 	else if (exp > 63) result = (ui64)0xffffffffffffffff;
 	else
 	{
 		result = 0;
-		BitWindowTransfer(v.storage, 0, 112, 112 - exp, &result, 0, 64, 0);
+		BitWindowTransfer(value.storage, 0, 112, 112 - exp, &result, 0, 64, 0);
 		SetBit(&result, exp);
 	}
 }
 
-void __float128::Floor( __float128 &v, __float128 &result )
+void __float128::Floor(const __float128 &value, __float128 &result)
 {
-	int unbiasedExponent = v.GetBase2Exponent();
-	if (unbiasedExponent == QUAD_EXPONENT_MAX) result = v; //NaN, +inf, -inf
+	int unbiasedExponent = value.GetBase2Exponent();
+	if (unbiasedExponent == QUAD_EXPONENT_MAX) result = value; //NaN, +inf, -inf
 	else if (unbiasedExponent < 0)
 	{
-		if (v.GetSign())
+		if (value.GetSign())
 		{
 			result = FromData(one); Negate(result);
 		}
@@ -1175,15 +1284,59 @@ void __float128::Floor( __float128 &v, __float128 &result )
 	}
 	else
 	{
-		if (unbiasedExponent >= 112) { result = v; return; }
-		result = v;
+		if (unbiasedExponent >= 112) { result = value; return; }
+		result = value;
 		int bitsToErase = 112 - unbiasedExponent;
 		ClearBlock(result.storage, 0, bitsToErase);
-		if (result != v)
+		if (result != value)
 		{
 			if (result.GetSign()) --result;
 		}
 	}
+}
+
+void __float128::CopySign(__float128 &value, const __float128 &sign)
+{
+		byte* vPtr = value.storage;
+		const byte* sPtr = sign.storage;
+		*(vPtr + 15) = (*(sPtr + 15) & 0x80) | (*(vPtr + 15) & 0x7F);
+}
+
+void __float128::Cordic(__float128 &x, __float128 &y, __float128 &z, int n, int k, int l)
+{
+	__float128 delta = QuadHalf;
+	do
+	{
+		__float128 sign = QuadOne;
+		__float128::CopySign(sign, z);
+		// x += sign*delta*y
+		__float128 tempX, tempY;
+		__float128::Mul(delta, y, tempX);
+		x += tempX;
+		// y += sign*delta*x
+		__float128::Mul(delta, x, tempY);
+		y += tempY;
+
+		// value -= sign*0.5*log((1+delta)/(1-delta))
+		tempX = delta;
+		__float128::Increment(tempX);
+		__float128::Sub(QuadOne, delta, tempY);
+		__float128::Div(tempX, tempY, tempX);
+		__float128::Log(tempX, QuadE);
+		__float128::Mul(QuadHalf, tempX, tempX);
+		__float128::Mul(sign, tempX, tempX);
+		z -= tempX;
+
+		if (n == k)
+		{
+			k = 3*k + 1;
+		}
+		else
+		{
+			delta = delta >> 1;
+			n++;
+		}
+	} while(n <= l);
 }
 
 #ifdef _MANAGED

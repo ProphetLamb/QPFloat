@@ -14,7 +14,7 @@ This file is part of QPFloat.
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
-	You should have received a copy of the GNU General Public License
+	You should have received left copy of the GNU General Public License
 	along with QPFloat.  If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -37,7 +37,7 @@ FPU_EXCEPTION_DECLARATION(Overflow)
 FPU_EXCEPTION_DECLARATION(Underflow)
 FPU_EXCEPTION_DECLARATION(DivideByZero)
 FPU_EXCEPTION_DECLARATION(Invalid)
-FPU_EXCEPTION_DECLARATION(Inexact);
+FPU_EXCEPTION_DECLARATION(Inexact)
 #undef FPU_EXCEPTION_DECLARATION
 #pragma endregion
 
@@ -65,19 +65,19 @@ private:
 	//the partial functions implement the Taylor series for the function
 	//they are slow on large values, because they have no optimizations
 	//but they are needed by the optimized functions - Ln, and Exp
-	static __float128 PartialLn(const __float128 &v);
-	static __float128 PartialExp(const __float128 &v);
-	static __float128 Factorial(i32 v)
+	static __float128 PartialLn(const __float128 &value);
+	static __float128 PartialExp(const __float128 &value);
+	static __float128 Factorial(i32 value)
 	{
-		if (v < 0) return QuadNaN;
-		if (v > MAX_FACTORIAL) return QuadPositiveInfinity;
-		return factorials[v];
+		if (value < 0) return QuadNaN;
+		if (value > MAX_FACTORIAL) return QuadPositiveInfinity;
+		return factorials[value];
 	}	
-	static __float128 FactorialReciprocal(i32 v)
+	static __float128 FactorialReciprocal(i32 value)
 	{
-		if (v < 0) return QuadNaN;
-		if (v > MAX_FACTORIAL) return QuadPositiveInfinity;
-		return factorialReciprocals[v];
+		if (value < 0) return QuadNaN;
+		if (value > MAX_FACTORIAL) return QuadPositiveInfinity;
+		return factorialReciprocals[value];
 	}
 public:
 	__float128();
@@ -156,13 +156,13 @@ public:
 	{
 		return GetBiasedExponent() == 0 && !IsZero();
 	}
-	static inline void Negate( __float128 &a)
+	static inline void Negate( __float128 &value)
 	{
-		*(a.storage + 15) ^= 0x80;
+		*(value.storage + 15) ^= 0x80;
 	}
-	static inline void Negate(const __float128 &a, __float128 &result )
+	static inline void Negate(const __float128 &value, __float128 &result )
 	{
-		result = a;
+		result = value;
 		Negate(result);
 	}
 	__float128 operator-() const
@@ -171,64 +171,111 @@ public:
 		Negate(copy);
 		return copy;
 	}
-	static void Add( const __float128 &a, const __float128 &b, __float128 &result );
-	static void Sub( const __float128 &a, const __float128 &b, __float128 &result );
-	static void Mul( const __float128 &a, const __float128 &b, __float128 &result );
-	static void Div( const __float128 &a, const __float128 &b, __float128 &result );
-	static inline void Increment( __float128 &v )
+	static void Add(const __float128 &left, const __float128 &right, __float128 &result);
+	static void Sub(const __float128 &left, const __float128 &right, __float128 &result);
+	static void Mul(const __float128 &left, const __float128 &right, __float128 &result);
+	static void Div(const __float128 &left, const __float128 &right, __float128 &result);
+	static inline void Inc(__float128 &value)
 	{
-		Add(v, QuadOne, v);
+		Add(value, QuadOne, value);
 	}
-	static inline void Decrement( __float128 &v )
+	static inline void Dec(__float128 &value)
 	{
 		__float128 temp = QuadOne;
-		Sub(v, temp, v);
+		Sub(value, temp, value);
 	}
-	__float128 inline operator+(const __float128 &b) const
+	static bool Equals(const __float128 &left, const __float128 &right);
+	inline bool Equals(const __float128 &other)
+	{
+		return Equals(*this, other);
+	}
+	static bool EpsilonEquals(const __float128 &left, const __float128 &right);
+	inline bool EpsilonEquals(const __float128 &other)
+	{
+		return EpsilonEquals(*this, other);
+	}
+	static i32 Cmp(const __float128 &left, const __float128 &right);
+	inline i32 Cmp(const __float128 &other)
+	{
+		return Cmp(*this, other);
+	}
+	friend inline __float128 operator+(const __float128 &left, const __float128 &right)
 	{
 		__float128 result;
-		Add(*this, b, result);
+		Add(left, right, result);
 		return result;
 	}
-	__float128 inline operator-(const __float128 &b) const
+	__float128& operator+=(const __float128 &other)
+	{
+		Add(*this, other, *this);
+		return *this;
+	}
+	friend inline __float128 operator-(const __float128 &left, const __float128 &right)
 	{
 		__float128 result;
-		Sub(*this, b, result);
+		Sub(left, right, result);
 		return result;
 	}
-	__float128 inline operator*(const __float128 &b) const
+	__float128& operator-=(const __float128 &other)
+	{
+		Add(*this, other, *this);
+		return *this;
+	}
+	friend inline __float128 operator*(const __float128 &left, const __float128 &right)
 	{
 		__float128 result;
-		Mul(*this, b, result);
+		Mul(left, right, result);
 		return result;
 	}
-	__float128 inline operator/(const __float128 &b) const
+	__float128& operator*=(const __float128 &other)
+	{
+		Add(*this, other, *this);
+		return *this;
+	}
+	friend inline __float128 operator/(const __float128 &left, const __float128 &right)
 	{
 		__float128 result;
-		Div(*this, b, result);
+		Div(left, right, result);
 		return result;
 	}
-	bool operator ==(const __float128 &b) const;
-	bool operator !=(const __float128 &b) const;
-	bool operator >(const __float128 &b) const;
-	bool operator <(const __float128 &b) const;
-	bool inline operator >=(const __float128 &b) const
+	__float128& operator/=(const __float128 &other)
 	{
-		if (*this == b) return true; //ensure that equals test happens first because it's much faster
-		else return *this > b;
+		Div(*this, other, *this);
+		return *this;
 	}
-	bool inline operator <=(const __float128 &b) const
+	friend inline bool operator==(const __float128 &left, const __float128 &right)
 	{
-		if (*this == b) return true; //ensure that equals test happens first because it's much faster
-		else return *this < b;
+		return __float128::Equals(left, right);
 	}
-	__float128 inline operator++()
+	friend inline bool operator!=(const __float128 &left, const __float128 &right)
+	{
+		return !__float128::Equals(left, right);
+	}
+	friend inline bool operator >(const __float128 &left, const __float128 &right)
+	{
+		return __float128::Cmp(left, right) > 0;
+	}
+	friend inline bool operator <(const __float128 &left, const __float128 &right)
+	{
+		return __float128::Cmp(left, right) < 0;
+	}
+	friend inline bool operator>=(const __float128 &left, const __float128 &right)
+	{
+		if (left == right) return true; //ensure that equals test happens first because it's much faster
+		else return left > right;
+	}
+	friend inline bool operator<=(const __float128 &left, const __float128 &right)
+	{
+		if (left == right) return true; //ensure that equals test happens first because it's much faster
+		else return left < right;
+	}
+	inline __float128 operator++()
 	{
 		__float128 temp = QuadOne;
 		Add(temp, *this, *this);
 		return *this;
 	}
-	__float128 inline operator--()
+	inline __float128 operator--()
 	{
 		__float128 temp = QuadNegOne;
 		Add(temp, *this, *this);
@@ -246,98 +293,98 @@ public:
 		temp.SetBase2Exponent(temp.GetBase2Exponent() - shift);
 		return temp;
 	}
-	__float128(double v);
-	static void ToDouble(const __float128 &v, double &result);
-	__float128(i64 v);
-	static void ToInt64(const __float128 &v, i64 &result);
-	__float128(i32 v);
-	static void ToInt32(const __float128 &v, i32 &result);
-	static bool EpsilonEquals(const __float128 &a, const __float128 &b)
-	{
-		__float128 c;
-		Sub(a, b, c);
-		c.SetSign(false);
-		return c < QuadEpsilon;
-	}
-	static void Abs(const __float128 &v, __float128 &result);
-	static inline __float128 Abs(const __float128 &v)
+	__float128(double value);
+	static void ToDouble(const __float128 &value, double &result);
+	__float128(i64 value);
+	static void ToInt64(const __float128 &value, i64 &result);
+	__float128(i32 value);
+	static void ToInt32(const __float128 &value, i32 &result);
+	static void Abs(const __float128 &value, __float128 &result);
+	static inline __float128 Abs(const __float128 &value)
 	{
 		__float128 result;
-		Abs(v, result);
+		Abs(value, result);
 		return result;
 	}
-	static void Max(const __float128 &a, const __float128 &b, __float128 &result);
-	static inline __float128 Max(const __float128 &a, const __float128 &b)
+	static void Max(const __float128 &left, const __float128 &right, __float128 &result);
+	static inline __float128 Max(const __float128 &left, const __float128 &right)
 	{
 		__float128 result;
-		Max(a, b, result);
+		Max(left, right, result);
 		return result;
 	}
-	static void Min(const __float128 &a, const __float128 &b, __float128 &result);
-	static inline __float128 Min(const __float128 &a, const __float128 &b)
+	static void Min(const __float128 &left, const __float128 &right, __float128 &result);
+	static inline __float128 Min(const __float128 &left, const __float128 &right)
 	{
 		__float128 result;
-		Min(a, b, result);
+		Min(left, right, result);
 		return result;
 	}
-	static __float128 Ln(__float128 &v);
-	static __float128 Exp(__float128 &v);
-	static __float128 Base2Exp(i32 v);
-	static __float128 Base2Exp(__float128 &v);
-	static __float128 Pow(__float128 &base, __float128 &exponent);
-	__float128 inline operator^(__float128 &b)
+	static __float128 Ln(const __float128 &value);
+	static __float128 Exp(const __float128 &value);
+	static __float128 Base2Exp(i32 value);
+	static __float128 Base2Exp(const __float128 &value);
+	static __float128 Pow(const __float128 &base, const __float128 &exponent);
+	__float128 inline operator^(const __float128 &right)
 	{
-		return Pow(*this, b);
+		return Pow(*this, right);
 	}
-	static __float128 Log(__float128 &v, __float128 &base);
-	static __float128 Log2(__float128 &v);
-	static void Ceiling( __float128 &v, __float128 &result );
-	static inline __float128 Ceiling(__float128 &v)
-	{
-		__float128 result;
-		Ceiling(v, result);
-		return result;
-	}
-	static void Floor( __float128 &v, __float128 &result );
-	static inline __float128 Floor(__float128 &v)
+	static __float128 Log(const __float128 &value, const __float128 &base);
+	static __float128 Log2(const __float128 &value);
+	static void Ceiling(const __float128 &value, __float128 &result);
+	static inline __float128 Ceiling(const __float128 &value)
 	{
 		__float128 result;
-		Floor(v, result);
+		Ceiling(value, result);
 		return result;
 	}
-	static void Round( __float128 &v, __float128 &result );
-	static inline __float128 Round(__float128 &v)
+	static void Floor(const __float128 &value, __float128 &result);
+	static inline __float128 Floor(const __float128 &value)
 	{
 		__float128 result;
-		Round(v, result);
+		Floor(value, result);
 		return result;
 	}
-	//result = Floor(Abs(v))
-	static void Truncate( __float128 &v, ui64 &result );
-	static inline ui64 Truncate( __float128 &v)
+	static void Round(const __float128 &value, __float128 &result);
+	static inline __float128 Round(const __float128 &value)
+	{
+		__float128 result;
+		Round(value, result);
+		return result;
+	}
+	//result = Floor(Abs(value))
+	static void Truncate(const __float128 &value, ui64 &result);
+	static inline ui64 Truncate(const __float128 &value)
 	{
 		ui64 result;
-		Truncate(v, result);
+		Truncate(value, result);
 		return result;
 	}
-	//result = Abs(v) - Floor(Abs(v))
-	static void Fraction( __float128 &v, __float128 &result );
-	static inline __float128 Fraction(__float128 &v)
+	//result = Abs(value) - Floor(Abs(value))
+	static void Fraction(const __float128 &value, __float128 &result);
+	static inline __float128 Fraction(const __float128 &value)
 	{
 		__float128 result;
-		Fraction(v, result);
+		Fraction(value, result);
 		return result;
 	}
-	static __float128 Sin(__float128 &v);
-	static __float128 Cos(__float128 &v);
-	static void SinCos(__float128 &v, __float128 &resultSin, __float128 &resultCos);
-	static __float128 Tan(__float128 &v);
-	static __float128 ASin(__float128 &v);
-	static __float128 ACos(__float128 &v);
-	static __float128 ATan(__float128 &v);
-	static __float128 ATan2(__float128 &y, __float128 &x);
+	static __float128 Sin(const __float128 &value);
+	static __float128 Cos(const __float128 &value);
+	static void SinCos(const __float128 &value, __float128 &resultSin, __float128 &resultCos);
+	static __float128 Tan(const __float128 &value);
+	static __float128 ASin(const __float128 &value);
+	static __float128 ACos(const __float128 &value);
+	static __float128 ATan(const __float128 &value);
+	static __float128 ATan2(const __float128 &y, const __float128 &x);
+	static __float128 Gamma(const __float128 &value);
+	static void SinhCosh(const __float128 &value, __float128 &resultSin, __float128 &resultCos);
+	static __float128 Tanh(const __float128 &value);
+	static __float128 ATanh2(const __float128 &y, const __float128 &x);
+	static __float128 GammaPlusOne(const __float128 &value);
+	static void CopySign(__float128 &value, const __float128 &sign);
 private:
-	//static __float128 Factorial(__float128 &v);
+	static void Cordic(__float128 &x, __float128 &y, __float128 &z, int n, int k, int l);
+	//static __float128 Factorial(__float128 &value);
 };
 
 #pragma warning(disable: 4949)

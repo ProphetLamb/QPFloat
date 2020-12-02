@@ -70,7 +70,7 @@ cd(roErr);
 cd(subMin);
 #undef cd
 
- #define MAX_FACTORIAL 1754
+#define MAX_FACTORIAL 1754
 struct __float128;
 
 extern __float128 factorials[MAX_FACTORIAL + 1];
@@ -188,3 +188,13 @@ i32 ReverseBitScan(ui32* a, byte intCount, i32 startingBit);
 bool IntBlockDiv(ui64* _result, ui64* _a, ui64* _b, byte longCount, int desiredBits);
 
 int FindHeadAndApplyRounding( ui32* buffer, int headScanBackStart );
+
+__float128 ScaleFactorTrigonometric();
+
+__float128 ScaleFactorHyperbolic();
+
+__float128 FactorialKPlusHalf(int k);
+
+__float128 GodfreyCoefficientMatrix(int n, int m);
+
+__float128 LanczosParameter(int k, int g);

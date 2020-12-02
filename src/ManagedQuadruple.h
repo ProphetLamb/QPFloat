@@ -120,6 +120,26 @@ namespace System
 			memcpy(ptr, data, 16);
 			return result;
 		}
+		
+		static void WriteGroupedString(System::Text::StringBuilder^ builder, Quadruple q, String^ decimalSeparator, array<int>^ groupSizes, String^ groupSeparator, int decimalDigits);
+		static void WriteSignedCurrencyString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision);
+		static void WriteSingedDecimalString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision);
+		static void WriteExponentialString(System::Text::StringBuilder^ builder, Quadruple q, String^ exponentSign, System::Globalization::NumberFormatInfo^ format, int precision);
+		static void WriteFixedString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision);
+		static void WriteSignedGeneralString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision);
+		static void WriteSignedNumericString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision);
+		static void WriteSignedPrecentString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision);
+		static void WriteSignedRoundTripString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format);
+
+		static System::Globalization::NumberFormatInfo^ FormatProviderToNumberFormat(IFormatProvider^ format)
+		{
+			if (format->GetType() == System::Globalization::NumberFormatInfo::typeid)
+				return (System::Globalization::NumberFormatInfo^)format;
+			if (format->GetType() == System::Globalization::CultureInfo::typeid)
+				return ((System::Globalization::CultureInfo^)format)->NumberFormat;
+			throw gcnew InvalidOperationException();
+		}
+
 		FPU_EXCEPTION_DECLARATION(Overflow);
 		FPU_EXCEPTION_DECLARATION(Underflow);
 		FPU_EXCEPTION_DECLARATION(DivideByZero);
@@ -411,10 +431,14 @@ namespace System
 		}
 
 		virtual String^ ToString() override;
-		String^ ToString(String^ format);
-		String^ ToString(IFormatProvider^ provider);
-		String^ ToString(String^ format, IFormatProvider^ provider);
-		static Quadruple FromString(String^ s);
+		virtual String^ ToString(String^ format) override;
+		virtual String^ ToString(IFormatProvider^ provider) override;
+		virtual String^ ToString(String^ format, IFormatProvider^ provider) override;
+		static Quadruple FromString(String^ str)
+		{
+			return Quadruple::FromString(str, System::Globalization::CultureInfo::CurrentCulture->NumberFormat);
+		}
+		static Quadruple FromString(String^ str, IFormatProvider^ format);
 
 		static inline int Sign(Quadruple v)
 		{

@@ -2,5 +2,4 @@
 .vscode/
 
 # Output
-out/
-
+out/**/

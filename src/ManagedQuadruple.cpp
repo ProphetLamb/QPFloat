@@ -39,7 +39,6 @@ namespace System
 		BitBlockTransfer(ptr, 0, buf, QUAD_MANTISSA_BYTES * 8 - QUAD_SIGNIFICANT_BITS, QUAD_SIGNIFICANT_BITS); //place in H.O. bits
 		return results;
 	}
-
 	void Quadruple::mantissa::set(array<byte>^ value)
 	{
 		int bitCount = value->Length * 8;
@@ -78,6 +77,353 @@ namespace System
 		result.IsSigned = sign;
 		if (currentExponent == 0) Underflow();
 		if (EnableInexactException) if (ReverseBitScan((ui32*)buffer, 0, headScanBackStart + expInc - 112 - 1) != -1) Inexact();
+	}
+
+	void Quadruple::WriteGroupedString(System::Text::StringBuilder^ builder, Quadruple q, String^ decimalSeparator, array<int>^ groupSizes, String^ groupSeparator, int decimalDigits)
+	{
+		//if we are just appending zeros after the decimal, then put them in a temporary buffer
+		System::Text::StringBuilder^ nonZeroWaitCache = gcnew System::Text::StringBuilder();
+
+		Quadruple currentValue = q;
+		if (currentValue.IsSubNormal)
+			currentValue *= Pow(10, 4931);
+		Quadruple::Abs(currentValue, currentValue);
+		Quadruple ten = 10;
+		Quadruple temp = Log(currentValue, ten);
+		int decimalDigitPlace = (int)Floor(temp);
+		if (currentValue / (ten ^ decimalDigitPlace) >= ten)
+		{
+			//an error occurred calculating the logarithm - specifically numeric rounding error
+			decimalDigitPlace++;
+		}
+		if (decimalDigitPlace < 0)
+			decimalDigitPlace = 0; //start from the ones place at minimum
+		int currentDecimalDigitPlace = decimalDigitPlace;
+		currentValue = currentValue / (ten ^ currentDecimalDigitPlace);
+		// Numeric groups
+		int numericGroup = 0;
+		int numericGroupIndex = 0;
+		//it's not excessively large or small, so we'll display it without scientific notation
+		while (currentValue != Quadruple::Zero || currentDecimalDigitPlace >= 0)
+		{
+			int digitValue = (int)currentValue;
+			if (currentDecimalDigitPlace == -1) nonZeroWaitCache->Append(decimalSeparator);
+			nonZeroWaitCache->Append(digitValue);
+			if (currentDecimalDigitPlace >= 0 || digitValue != 0)
+			{
+				builder->Append(nonZeroWaitCache);
+				nonZeroWaitCache->Clear();
+			}
+			if (decimalDigitPlace < 0)
+			{
+				if (numericGroupIndex == groupSizes[numericGroup]) // Move to next number group
+				{
+					nonZeroWaitCache->Append(groupSeparator);
+					numericGroupIndex = 0;
+					if (numericGroup == groupSizes->Length - 1) // Loop to first number group
+						numericGroup = 0;
+					else
+						numericGroup++;
+				}
+				numericGroupIndex++;
+			}
+			currentValue = Quadruple::Fraction(currentValue);
+			Mul(currentValue, ten, currentValue);
+			currentDecimalDigitPlace--;
+		}
+		if (decimalDigitPlace < decimalDigits)
+			builder->Append(gcnew String('0', decimalDigits - decimalDigitPlace));
+	}
+	void Quadruple::WriteSignedCurrencyString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision)
+	{
+		if (q.IsSigned)
+		{
+			switch(format->CurrencyNegativePattern)
+			{
+				case 0:
+					builder->Append("(")->Append(format->CurrencySymbol);
+					break;
+				case 1:
+					builder->Append(format->NegativeSign)->Append(format->CurrencySymbol);
+					break;
+				case 2:
+					builder->Append(format->CurrencySymbol)->Append(format->NegativeSign);
+					break;
+				case 3:
+					builder->Append(format->CurrencySymbol);
+					break;
+				case 4:
+					builder->Append("(");
+					break;
+				case 5:
+					builder->Append(format->NegativeSign);
+					break;
+				case 8:
+					builder->Append(format->NegativeSign);
+					break;
+				case 9:
+					builder->Append(format->NegativeSign)->Append(format->CurrencySymbol)->Append(" ");
+					break;
+				case 11:
+					builder->Append(format->CurrencySymbol)->Append(" ");
+					break;
+				case 12:
+					builder->Append(format->CurrencySymbol)->Append(" ")->Append(format->NegativeSign);
+					break;
+				case 14:
+					builder->Append("(")->Append(format->CurrencySymbol)->Append(" ");
+					break;
+				case 15:
+					builder->Append("(");
+					break;
+			}
+		}
+		else
+		{
+			switch(format->CurrencyPositivePattern)
+			{
+				case 0:
+					builder->Append(format->CurrencySymbol);
+					break;
+				case 2:
+					builder->Append(format->CurrencySymbol)->Append(" ");
+					break;
+			}
+		}
+		WriteGroupedString(builder, q, format->CurrencyDecimalSeparator, format->CurrencyGroupSizes, format->CurrencyGroupSeparator, -1);
+		if (q.IsSigned)
+		{
+			switch(format->CurrencyNegativePattern)
+			{
+				case 0:
+					builder->Append(")");
+					break;
+				case 3:
+					builder->Append(format->NegativeSign);
+					break;
+				case 4:
+					builder->Append(format->CurrencySymbol)->Append(")");
+					break;
+				case 5:
+					builder->Append(format->CurrencySymbol);
+					break;
+				case 6:
+					builder->Append(format->NegativeSign)->Append(format->CurrencySymbol);
+					break;
+				case 7:
+					builder->Append(format->CurrencySymbol)->Append(format->NegativeSign);
+				case 8:
+					builder->Append(" ")->Append(format->CurrencySymbol);
+					break;
+				case 10:
+					builder->Append(" ")->Append(format->CurrencySymbol)->Append(format->NegativeSign);
+					break;
+				case 11:
+					builder->Append(format->NegativeSign);
+					break;
+				case 13:
+					builder->Append(format->NegativeSign)->Append(" ")->Append(format->CurrencySymbol);
+					break;
+				case 14:
+					builder->Append(")");
+					break;
+				case 15:
+					builder->Append(" ")->Append(format->CurrencySymbol)->Append(")");
+					break;
+			}
+		}
+		else
+		{
+			switch(format->CurrencyPositivePattern)
+			{
+				case 1:
+					builder->Append(format->CurrencySymbol);
+					break;
+				case 3:
+					builder->Append(" ")->Append(format->CurrencySymbol);
+					break;
+			}
+		}
+	}
+	void Quadruple::WriteSingedDecimalString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision)
+	{
+		//if we are just appending zeros after the decimal, then put them in a temporary buffer
+		System::Text::StringBuilder^ nonZeroWaitCache = gcnew System::Text::StringBuilder();
+		if (q.IsSigned)
+			builder->Append(format->NegativeSign);
+		
+		Quadruple currentValue = q;
+		if (currentValue.IsSubNormal)
+			currentValue *= Pow(10, 4931);
+		Quadruple::Abs(currentValue, currentValue);
+		Quadruple ten = 10;
+		Quadruple temp = Log(currentValue, ten);
+		int decimalDigitPlace = (int)Floor(temp);
+		if (currentValue / (ten ^ decimalDigitPlace) >= ten)
+		{
+			//an error occurred calculating the logarithm - specifically numeric rounding error
+			decimalDigitPlace++;
+		}
+		if (decimalDigitPlace < 0)
+			decimalDigitPlace = 0; //start from the ones place at minimum
+		int currentDecimalDigitPlace = decimalDigitPlace;
+		currentValue = currentValue / (ten ^ currentDecimalDigitPlace);
+		//it's not excessively large or small, so we'll display it without scientific notation
+		while (currentValue != Quadruple::Zero || currentDecimalDigitPlace >= 0)
+		{
+			int digitValue = (int)currentValue;
+			if (currentDecimalDigitPlace == -1) nonZeroWaitCache->Append(format->NumberDecimalSeparator);
+			nonZeroWaitCache->Append(digitValue);
+			if (currentDecimalDigitPlace >= 0 || digitValue != 0)
+			{
+				builder->Append(nonZeroWaitCache);
+				nonZeroWaitCache->Clear();
+			}
+			currentValue = Quadruple::Fraction(currentValue);
+			Mul(currentValue, ten, currentValue);
+			currentDecimalDigitPlace--;
+		}
+		int integerDigits = builder->Length - decimalDigitPlace != 0 ? 1 + decimalDigitPlace : 0;
+		if (integerDigits < precision)
+			builder->Insert(0, gcnew String(format->NativeDigits[0][0], precision - integerDigits));
+	}
+	void Quadruple::WriteExponentialString(System::Text::StringBuilder^ builder, Quadruple q, String^ exponentSign, System::Globalization::NumberFormatInfo^ format, int precision)
+	{
+		Quadruple currentValue = q;
+		int scientificExponent = 0;
+		if (currentValue.IsSubNormal)
+		{
+			currentValue *= Pow(10, 4931);
+			scientificExponent = -4931;
+		}
+		Quadruple::Abs(currentValue, currentValue);
+		Quadruple ten = 10;
+		Quadruple temp = Log(currentValue, ten);
+		int decimalDigitPlace = (int)Floor(temp);
+		scientificExponent += decimalDigitPlace;
+		Quadruple digitMultiplier = ten ^ decimalDigitPlace; //use a round to make sure it's accurate
+		if (currentValue / digitMultiplier >= ten)
+		{
+			//an error occurred calculating the logarithm - specifically numeric rounding error
+			decimalDigitPlace++;
+			scientificExponent++;
+		}
+		int displayedDigitPlaces = 0;
+		digitMultiplier = ten ^ decimalDigitPlace;
+		currentValue = currentValue / digitMultiplier;
+		WriteFixedString(builder, currentValue, format, precision); // Append significant digits
+		builder->Append(exponentSign);
+		if (scientificExponent > 0) builder->Append(format->PositiveSign); // Append exponent
+		builder->Append(scientificExponent);
+	}
+	void Quadruple::WriteFixedString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision)
+	{
+		//if we are just appending zeros after the decimal, then put them in a temporary buffer
+		System::Text::StringBuilder^ nonZeroWaitCache = gcnew System::Text::StringBuilder();
+
+		Quadruple currentValue = q;
+		if (currentValue.IsSubNormal)
+			currentValue *= Pow(10, 4931);
+		Quadruple::Abs(currentValue, currentValue);
+		Quadruple ten = 10;
+		Quadruple temp = Log(currentValue, ten);
+		int decimalDigitPlace = (int)Floor(temp);
+		if (currentValue / (ten ^ decimalDigitPlace) >= ten)
+		{
+			//an error occurred calculating the logarithm - specifically numeric rounding error
+			decimalDigitPlace++;
+		}
+		if (decimalDigitPlace < 0)
+			decimalDigitPlace = 0; //start from the ones place at minimum
+		int currentDecimalDigitPlace = decimalDigitPlace;
+		currentValue = currentValue / (ten ^ currentDecimalDigitPlace);
+		//it's not excessively large or small, so we'll display it without scientific notation
+		while (currentValue != Quadruple::Zero || currentDecimalDigitPlace >= precision)
+		{
+			int digitValue = (int)currentValue;
+			if (currentDecimalDigitPlace == -1) nonZeroWaitCache->Append(format->NumberDecimalSeparator);
+			nonZeroWaitCache->Append(digitValue);
+			if (currentDecimalDigitPlace >= 0 || digitValue != 0)
+			{
+				builder->Append(nonZeroWaitCache);
+				nonZeroWaitCache->Clear();
+			}
+			currentValue = Quadruple::Fraction(currentValue);
+			Mul(currentValue, ten, currentValue);
+			currentDecimalDigitPlace--;
+		}
+		if (decimalDigitPlace < precision)
+			builder->Append(gcnew String(format->NativeDigits[0][0], precision - decimalDigitPlace));
+	}
+	void Quadruple::WriteSignedGeneralString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision)
+	{
+		//if we are just appending zeros after the decimal, then put them in a temporary buffer
+		System::Text::StringBuilder^ nonZeroWaitCache = gcnew System::Text::StringBuilder();
+		if (q.IsSigned)
+			builder->Append(format->NegativeSign);
+
+		Quadruple currentValue = q;
+		int scientificExponent = 0;
+		if (currentValue.IsSubNormal)
+		{
+			currentValue *= Pow(10, 4931);
+			scientificExponent = -4931;
+		}
+		Quadruple::Abs(currentValue, currentValue);
+		Quadruple ten = 10;
+		Quadruple temp = Log(currentValue, ten);
+		int decimalDigitPlace = (int)Floor(temp);
+		scientificExponent += decimalDigitPlace;
+		Quadruple digitMultiplier = ten ^ decimalDigitPlace; //use a round to make sure it's accurate
+		if (currentValue / digitMultiplier >= ten)
+		{
+			//an error occurred calculating the logarithm - specifically numeric rounding error
+			scientificExponent++;
+		}
+		int currentDecimalDigitPlace = decimalDigitPlace;
+		if (scientificExponent < 40 && scientificExponent > -5)
+		{
+			//it's not excessively large or small, so we'll display it without scientific notation
+			while (currentValue != Quadruple::Zero || currentDecimalDigitPlace >= 0)
+			{
+				int digitValue = (int)currentValue;
+				if (currentDecimalDigitPlace == -1) nonZeroWaitCache->Append(format->NumberDecimalSeparator);
+				nonZeroWaitCache->Append(digitValue);
+				if (currentDecimalDigitPlace >= 0 || digitValue != 0)
+				{
+					builder->Append(nonZeroWaitCache);
+					nonZeroWaitCache->Clear();
+				}
+				currentValue = Quadruple::Fraction(currentValue);
+				Mul(currentValue, ten, currentValue);
+				currentDecimalDigitPlace--;
+			}
+			if (decimalDigitPlace < precision)
+				builder->Append(gcnew String(format->NativeDigits[0][0], precision - decimalDigitPlace));
+		}
+		else
+		{
+			WriteFixedString(builder, currentValue, format, 0); // Append significant digits
+			builder->Append("e");
+			if (scientificExponent > 0) builder->Append(format->PositiveSign); // Append exponent
+			builder->Append(scientificExponent);
+		}
+	}
+	void Quadruple::WriteSignedNumericString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision)
+	{
+		if (q.IsSigned)
+			builder->Append(format->NegativeSign);
+		WriteGroupedString(builder, q, format->NumberDecimalSeparator, format->NumberGroupSizes, format->NumberGroupSeparator, -1);
+	}
+	void Quadruple::WriteSignedPrecentString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format, int precision)
+	{
+		WriteGroupedString(builder, q*100, format->PercentDecimalSeparator, format->PercentGroupSizes, format->PercentGroupSeparator, -1);
+	}
+	void Quadruple::WriteSignedRoundTripString(System::Text::StringBuilder^ builder, Quadruple q, System::Globalization::NumberFormatInfo^ format)
+	{
+		if (q.IsSigned)
+			builder->Append(format->NegativeSign);
+		WriteExponentialString(builder, q, "e", format, 37);
 	}
 
 	void Quadruple::Add( Quadruple %a, Quadruple %b, Quadruple %result )
@@ -352,104 +698,43 @@ namespace System
 
 	String^ Quadruple::ToString()
 	{
-		if (IsNaN) return "NaN";
-		if (*this == PositiveInfinity) return "Infinity";
-		if (*this == NegativeInfinity) return "-Infinity";
-		if (IsZero) return IsSigned ? "-0" : "0";
-		System::Text::StringBuilder^ result = gcnew System::Text::StringBuilder();
-		//if we are just appending zeros after the decimal, then put them in a temporary buffer
-		System::Text::StringBuilder^ nonZeroWaitCache = gcnew System::Text::StringBuilder();
-		bool sign = this->IsSigned;
-		if (sign) result->Append("-");
-
-		Quadruple currentValue = *this; //(Quadruple)System::Runtime::InteropServices::Marshal::PtrToStructure((IntPtr)GAHH, Quadruple::typeid);
-		int scientificExponent = 0;
-		if (currentValue.IsSubNormal)
-		{
-			currentValue *= Pow(10, 4931);
-			scientificExponent = -4931;
-		}
-		Quadruple::Abs(currentValue, currentValue);
-		Quadruple ten = 10;
-		Quadruple temp = Log(currentValue, ten);
-		int decimalDigitPlace = (int)Floor(temp);
-		scientificExponent += decimalDigitPlace;
-		Quadruple digitMultiplier = ten ^ decimalDigitPlace; //use a round to make sure it's accurate
-		if (currentValue / digitMultiplier >= ten)
-		{
-			//an error occurred calculating the logarithm - specifically numeric rounding error
-			decimalDigitPlace++;
-			scientificExponent++;
-		}
-		int displayedDigitPlaces = 0;
-		if (scientificExponent < 40 && scientificExponent > -5)
-		{
-			if (decimalDigitPlace < 0 ) decimalDigitPlace = 0; //start from the ones place at minimum
-			digitMultiplier = ten ^ decimalDigitPlace;
-			currentValue = currentValue / digitMultiplier;
-			//it's not excessively large or small, so we'll display it without scientific notation
-			while ((currentValue != Quadruple::Zero || decimalDigitPlace >= 0) && displayedDigitPlaces < 34)
-			{
-				int digitValue = (int)currentValue;
-				if (decimalDigitPlace == -1) nonZeroWaitCache->Append(".");
-				nonZeroWaitCache->Append(digitValue);
-				if (decimalDigitPlace >= 0 || digitValue != 0)
-				{
-					result->Append(nonZeroWaitCache);
-					nonZeroWaitCache->Clear();
-				}
-				currentValue = Quadruple::Fraction(currentValue);
-				Mul(currentValue, ten, currentValue);
-				decimalDigitPlace--;
-				displayedDigitPlaces++;
-			}
-		}
-		else
-		{
-			digitMultiplier = ten ^ decimalDigitPlace;
-			currentValue = currentValue / digitMultiplier;
-			result->Append(currentValue.ToString());
-			result->Append("e");
-			if (scientificExponent > 0) result->Append("+");
-			result->Append(scientificExponent);
-		}
-		return result->ToString();
+		return ToString("g");
 	}
 
 	String^ Quadruple::ToString( String^ format, IFormatProvider^ provider )
 	{
 		System::Text::StringBuilder^ builder = gcnew System::Text::StringBuilder();
-		NumberFormatInfo^ format = (NumberFormatInfo^)provider;
-		int precision = format->Length > 1 ? std::stoi(format->Remove(0,1)) : -1;
+		System::Globalization::NumberFormatInfo^ formatProvider = FormatProviderToNumberFormat(provider);
+		int precision = format->Length > 1 ? Int32::Parse(format->Remove(0,1)) : -1;
 		switch (tolower(format[0]))
 		{
 			case 'c':
-				WriteSignedCurrencyString(builder, *this, format, precision);
+				WriteSignedCurrencyString(builder, *this, formatProvider, precision);
 				break;
 			case 'd':
-				WriteSingedDecimalString(builder, *this, format, precision);
+				WriteSingedDecimalString(builder, *this, formatProvider, precision);
 				break;
 			case 'e':
 				if (this->IsSigned)
-					builder->Append(format->NegativeSign);
-				WriteExponentialString(builder, *this, format, precision);
+					builder->Append(formatProvider->NegativeSign);
+				WriteExponentialString(builder, *this, gcnew String(format[0], 1), formatProvider, precision);
 				break;
 			case 'f':
 				if (this->IsSigned)
-					builder->Append(format->NegativeSign);
-				WriteFixedString(builder, *this, format, precision);
+					builder->Append(formatProvider->NegativeSign);
+				WriteFixedString(builder, *this, formatProvider, precision);
 				break;
 			case 'g':
-				WriteSignedGeneralString(builder, q, format, precision);
+				WriteSignedGeneralString(builder, *this, formatProvider, precision);
 				break;
 			case 'n':
-				WriteSignedNumericString(builder, q, format, precision);
+				WriteSignedNumericString(builder, *this, formatProvider, precision);
 				break;
 			case 'p':
-				WriteSignedPrecentString(builder, q, format, precision);
+				WriteSignedPrecentString(builder, *this, formatProvider, precision);
 				break;
 			case 'r':
-				WriteSignedRoundTripString(builder, q, format, precision);
+				WriteSignedRoundTripString(builder, *this, formatProvider);
 				break;
 			default:
 				throw gcnew System::FormatException();
@@ -459,375 +744,22 @@ namespace System
 
 	String^ Quadruple::ToString(String^ format)
 	{
-		return ToString(format, System::Globalization::CultureInfo->CurrentCulture->NumberFormat);
+		return ToString(format, System::Globalization::CultureInfo::CurrentCulture->NumberFormat);
 	}
 	String^ Quadruple::ToString(IFormatProvider^ provider)
 	{
-		return ToString('g', provider);
+		return ToString("g", provider);
 	}
 
-	static void WriteGroupedString(System::Text::StringBuilder^ builder, Quadruple q, String^ decimalSeparator, int[] groupSizes, String^ groupSeparator, int decimalDigits)
+	Quadruple Quadruple::FromString(String^ str, IFormatProvider^ format)
 	{
-		//if we are just appending zeros after the decimal, then put them in a temporary buffer
-		System::Text::StringBuilder^ nonZeroWaitCache = gcnew System::Text::StringBuilder();
+		System::Globalization::NumberFormatInfo^ provider = FormatProviderToNumberFormat(format);
 
-		Quadruple currentValue = q;
-		if (currentValue.IsSubNormal)
-			currentValue *= Pow(10, 4931);
-		Quadruple::Abs(currentValue, currentValue);
-		Quadruple ten = 10;
-		Quadruple temp = Log(currentValue, ten);
-		int decimalDigitPlace = (int)Floor(temp);
-		if (currentValue / (ten ^ decimalDigitPlace) >= ten)
-		{
-			//an error occurred calculating the logarithm - specifically numeric rounding error
-			decimalDigitPlace++;
-		}
-		if (decimalDigitPlace < 0)
-			decimalDigitPlace = 0; //start from the ones place at minimum
-		int currentDecimalDigitPlace = decimalDigitPlace;
-		currentValue = currentValue / (ten ^ currentDecimalDigitPlace);
-		// Numeric groups
-		int numericGroup = 0;
-		int numericGroupIndex = 0;
-		//it's not excessively large or small, so we'll display it without scientific notation
-		while (currentValue != Quadruple::Zero || currentDecimalDigitPlace >= 0)
-		{
-			int digitValue = (int)currentValue;
-			if (currentDecimalDigitPlace == -1) nonZeroWaitCache->Append(decimalSeparator);
-			nonZeroWaitCache->Append(digitValue);
-			if (currentDecimalDigitPlace >= 0 || digitValue != 0)
-			{
-				builder->Append(nonZeroWaitCache);
-				nonZeroWaitCache->Clear();
-			}
-			if (decimalDigitPlace < 0)
-			{
-				if (numericGroupIndex == groupSizes[numericGroup]) // Move to next number group
-				{
-					nonZeroWaitCache->Append(groupSeparator);
-					numericGroupIndex = 0;
-					if (numericGroup == groupSizes->Length - 1) // Loop to first number group
-						numericGroup = 0;
-					else
-						numericGroup++;
-				}
-				numericGroupIndex++;
-			}
-			currentValue = Quadruple::Fraction(currentValue);
-			Mul(currentValue, ten, currentValue);
-			currentDecimalDigitPlace--;
-		}
-		if (decimalDigitPlace < decimalDigits)
-			builder->Append(gcnew String(format->NativeDigits[0][0], decimalDigits - decimalDigitPlace));
-	}
-
-	static void WriteSignedCurrencyString(System::Text::StringBuilder^ builder, Quadruple q, NumberFormatInfo^ format, int precision = -1)
-	{
-		if (q.IsSigned)
-		{
-			switch(format->CurrencyNegativePattern)
-			{
-				case 0:
-					builder->Append("(")->Append(format->CurrencySymbol);
-					break;
-				case 1:
-					builder->Append(format->NegativeSign)->Append(format->CurrencySymbol);
-					break;
-				case 2:
-					builder->Append(format->CurrencySymbol)->Append(format->NegativeSign);
-					break;
-				case 3:
-					builder->Append(format->CurrencySymbol);
-					break;
-				case 4:
-					builder->Append("(");
-					break;
-				case 5:
-					builder->Append(format->NegativeSign);
-					break;
-				case 8:
-					builder->Append(format->NegativeSign);
-					break;
-				case 9:
-					builder->Append(format->NegativeSign)->Append(format->CurrencySymbol)->Append(" ");
-					break;
-				case 11:
-					builder->Append(format->CurrencySymbol)->Append(" ");
-					break;
-				case 12:
-					builder->Append(format->CurrencySymbol)->Append(" ")->Append(format->NegativeSign);
-					break;
-				case 14:
-					builder->Append("(")->Append(format->CurrencySymbol)->Append(" ");
-					break;
-				case 15:
-					builder->Append("(");
-					break;
-			}
-		}
-		else
-		{
-			switch(format->CurrencyPositivePattern)
-			{
-				case 0:
-					builder->Append(format->CurrencySymbol);
-					break;
-				case 2:
-					builder->Append(format->CurrencySymbol)->Append(" ");
-					break;
-			}
-		}
-		WriteGroupedString(builder, q, format->CurrencyDecimalSeparator, format->CurrencyGroupSizes, format->CurrencyGroupSeparator);
-		if (q.IsSigned)
-		{
-			switch(format->CurrencyNegativePattern)
-			{
-				case 0:
-					builder->Append(")");
-					break;
-				case 3:
-					builder->Append(format->NegativeSign);
-					break;
-				case 4:
-					builder->Append(format->CurrencySymbol)->Append(")");
-					break;
-				case 5:
-					builder->Append(format->CurrencySymbol);
-					break;
-				case 6:
-					builder->Append(format->NegativeSign)->Append(format->CurrencySymbol);
-					break;
-				case 7:
-					builder->Append(format->CurrencySymbol)->Append(format->NegativeSign);
-				case 8:
-					builder->Append(" ")->Append(format->CurrencySymbol);
-					break;
-				case 10:
-					builder->Append(" ")->Append(format->CurrencySymbol)->Append(format->NegativeSign);
-					break;
-				case 11:
-					builder->Append(format->NegativeSign);
-					break;
-				case 13:
-					builder->Append(format->NegativeSign)->Append(" ")->Append(format->CurrencySymbol);
-					break;
-				case 14:
-					builder->Append(")");
-					break;
-				case 15:
-					builder->Append(" ")->Append(format->CurrencySymbol)->Append(")");
-					break;
-			}
-		}
-		else
-		{
-			switch(format->CurrencyPositivePattern)
-			{
-				case 1:
-					builder->Append(format->CurrencySymbol);
-					break;
-				case 3:
-					builder->Append(" ")->Append(format->CurrencySymbol);
-					break;
-			}
-		}
-	}
-
-	static void WriteSingedDecimalString(System::Text::StringBuilder^ builder, Quadruple q, NumberFormatInfo^ format, int precision)
-	{
-		//if we are just appending zeros after the decimal, then put them in a temporary buffer
-		System::Text::StringBuilder^ nonZeroWaitCache = gcnew System::Text::StringBuilder();
-		if (q.IsSigned)
-			builder->Append(format->NegativeSign);
-		
-		Quadruple currentValue = q;
-		if (currentValue.IsSubNormal)
-			currentValue *= Pow(10, 4931);
-		Quadruple::Abs(currentValue, currentValue);
-		Quadruple ten = 10;
-		Quadruple temp = Log(currentValue, ten);
-		int decimalDigitPlace = (int)Floor(temp);
-		if (currentValue / (ten ^ decimalDigitPlace) >= ten)
-		{
-			//an error occurred calculating the logarithm - specifically numeric rounding error
-			decimalDigitPlace++;
-		}
-		if (decimalDigitPlace < 0)
-			decimalDigitPlace = 0; //start from the ones place at minimum
-		int currentDecimalDigitPlace = decimalDigitPlace;
-		currentValue = currentValue / (ten ^ currentDecimalDigitPlace);
-		//it's not excessively large or small, so we'll display it without scientific notation
-		while (currentValue != Quadruple::Zero || currentDecimalDigitPlace >= 0)
-		{
-			int digitValue = (int)currentValue;
-			if (currentDecimalDigitPlace == -1) nonZeroWaitCache->Append(format->NumberDecimalSeparator);
-			nonZeroWaitCache->Append(digitValue);
-			if (currentDecimalDigitPlace >= 0 || digitValue != 0)
-			{
-				builder->Append(nonZeroWaitCache);
-				nonZeroWaitCache->Clear();
-			}
-			currentValue = Quadruple::Fraction(currentValue);
-			Mul(currentValue, ten, currentValue);
-			currentDecimalDigitPlace--;
-		}
-		int integerDigits = builder->Length - decimalDigitPlace != 0 ? 1 + decimalDigitPlace : 0;
-		if (integerDigits < precision)
-			builder->Insert(0, gcnew String(format->NativeDigits[0][0], precision - integerDigits));
-	}
-
-	static void WriteExponentialString(System::Text::StringBuilder builder, Quadruple q, String^ exponentSign, NumberFormatInfo^ format, int precision)
-	{
-		Quadruple currentValue = q;
-		int scientificExponent = 0;
-		if (currentValue.IsSubNormal)
-		{
-			currentValue *= Pow(10, 4931);
-			scientificExponent = -4931;
-		}
-		Quadruple::Abs(currentValue, currentValue);
-		Quadruple ten = 10;
-		Quadruple temp = Log(currentValue, ten);
-		int decimalDigitPlace = (int)Floor(temp);
-		scientificExponent += decimalDigitPlace;
-		Quadruple digitMultiplier = ten ^ decimalDigitPlace; //use a round to make sure it's accurate
-		if (currentValue / digitMultiplier >= ten)
-		{
-			//an error occurred calculating the logarithm - specifically numeric rounding error
-			decimalDigitPlace++;
-			scientificExponent++;
-		}
-		int displayedDigitPlaces = 0;
-		digitMultiplier = ten ^ decimalDigitPlace;
-		currentValue = currentValue / digitMultiplier;
-		WriteFixedString(builder, currentValue, format, precision); // Append significant digits
-		builder->Append(exponentSign);
-		if (scientificExponent > 0) builder->Append(format->PositiveSign); // Append exponent
-		builder->Append(scientificExponent);
-	}
-	
-	static void WriteFixedString(System::Text::StringBuilder^ builder, Quadruple q, NumberFormatInfo^ format, int precision)
-	{
-		//if we are just appending zeros after the decimal, then put them in a temporary buffer
-		System::Text::StringBuilder^ nonZeroWaitCache = gcnew System::Text::StringBuilder();
-
-		Quadruple currentValue = q;
-		if (currentValue.IsSubNormal)
-			currentValue *= Pow(10, 4931);
-		Quadruple::Abs(currentValue, currentValue);
-		Quadruple ten = 10;
-		Quadruple temp = Log(currentValue, ten);
-		int decimalDigitPlace = (int)Floor(temp);
-		if (currentValue / (ten ^ decimalDigitPlace) >= ten)
-		{
-			//an error occurred calculating the logarithm - specifically numeric rounding error
-			decimalDigitPlace++;
-		}
-		if (decimalDigitPlace < 0)
-			decimalDigitPlace = 0; //start from the ones place at minimum
-		int currentDecimalDigitPlace = decimalDigitPlace;
-		currentValue = currentValue / (ten ^ currentDecimalDigitPlace);
-		//it's not excessively large or small, so we'll display it without scientific notation
-		while (currentValue != Quadruple::Zero || currentDecimalDigitPlace >= precision)
-		{
-			int digitValue = (int)currentValue;
-			if (currentDecimalDigitPlace == -1) nonZeroWaitCache->Append(format->NumberDecimalSeparator);
-			nonZeroWaitCache->Append(digitValue);
-			if (currentDecimalDigitPlace >= 0 || digitValue != 0)
-			{
-				builder->Append(nonZeroWaitCache);
-				nonZeroWaitCache->Clear();
-			}
-			currentValue = Quadruple::Fraction(currentValue);
-			Mul(currentValue, ten, currentValue);
-			currentDecimalDigitPlace--;
-		}
-		if (decimalDigitPlace < precision)
-			builder->Append(gcnew String(format->NativeDigits[0][0], precision - decimalDigitPlace));
-	}
-
-	static void WriteSignedGeneralString(Sytem::Text::StringBuilder^ builder, Quadruple q, NumberFormatInfo^ format, int precision)
-	{
-		//if we are just appending zeros after the decimal, then put them in a temporary buffer
-		System::Text::StringBuilder^ nonZeroWaitCache = gcnew System::Text::StringBuilder();
-		if (q.IsSigned)
-			builder->Append(format->NegativeSymbol);
-
-		Quadruple currentValue = q;
-		int scientificExponent = 0;
-		if (currentValue.IsSubNormal)
-		{
-			currentValue *= Pow(10, 4931);
-			scientificExponent = -4931;
-		}
-		Quadruple::Abs(currentValue, currentValue);
-		Quadruple ten = 10;
-		Quadruple temp = Log(currentValue, ten);
-		int decimalDigitPlace = (int)Floor(temp);
-		scientificExponent += decimalDigitPlace;
-		Quadruple digitMultiplier = ten ^ decimalDigitPlace; //use a round to make sure it's accurate
-		if (currentValue / digitMultiplier >= ten)
-		{
-			//an error occurred calculating the logarithm - specifically numeric rounding error
-			scientificExponent++;
-		}
-		int currentDecimalDigitPlace = decimalDigitPlace;
-		if (scientificExponent < 40 && scientificExponent > -5)
-		{
-			//it's not excessively large or small, so we'll display it without scientific notation
-			while (currentValue != Quadruple::Zero || currentDecimalDigitPlace >= 0)
-			{
-				int digitValue = (int)currentValue;
-				if (currentDecimalDigitPlace == -1) nonZeroWaitCache->Append(format->NumberDecimalSeparator);
-				nonZeroWaitCache->Append(digitValue);
-				if (currentDecimalDigitPlace >= 0 || digitValue != 0)
-				{
-					builder->Append(nonZeroWaitCache);
-					nonZeroWaitCache->Clear();
-				}
-				currentValue = Quadruple::Fraction(currentValue);
-				Mul(currentValue, ten, currentValue);
-				currentDecimalDigitPlace--;
-			}
-			if (decimalDigitPlace < precision)
-				builder->Append(gcnew String(format->NativeDigits[0][0], precision - decimalDigitPlace));
-		}
-		else
-		{
-			WriteFixedString(builder, currentValue, format, 0); // Append significant digits
-			builder->Append("e");
-			if (scientificExponent > 0) builder->Append(format->PositiveSign); // Append exponent
-			builder->Append(scientificExponent);
-		}
-	}
-
-	static void WriteSignedNumericString(System::Text::StringBuilder^ builder, Quadruple q, NumberFormatInfo^ format, int precision)
-	{
-		if (q.IsSigned)
-			builder->Append(format->NegativeSign);
-		WriteGroupedString(builder, q, format->NumberDecimalSeparator, format->NumberGroupSizes, format->NumberGroupSeparator);
-	}
-
-	static void WriteSignedPrecentString(System::Text::StringBuilder^ builder, Quadruple q, NumberFormatInfo^ format, int precision)
-	{
-		WriteGroupedString(builder, q*100, format->PercentDecimalSeparator, format->PercentGroupSizes, format->PercentGroupSeparator);
-	}
-
-	static void WriteSignedRoundTripString(System::Text::StringBuilder^ builder, Quadruple q, NumberFormatInfo^ format)
-	{
-		if (q.IsSigned)
-			builder->Append(format->NegativeSign);
-		WriteExponentialString(builder, q, exponentSign, format, 37);
-	}
-
-	System::Quadruple Quadruple::FromString(String^ str, NumberFormatInfo^ format)
-	{
 		str = str->Trim();
 		System::Text::StringBuilder^ builder = gcnew System::Text::StringBuilder(str);
 		Quadruple result = 0;
 		bool negative = false;
-		if (builder->default[0] == format->NegativeSign[0])
+		if (builder->default[0] == provider->NegativeSign[0])
 		{
 			negative = true;
 			builder->Remove(0, 1);
@@ -835,7 +767,7 @@ namespace System
 		Quadruple ten = 10;
 		int postDecimalDigits = 0;
 		bool postDecimal = false;
-		while (s->Length > 0)
+		while (str->Length > 0)
 		{
 			Char digit = builder->default[0];
 			builder->Remove(0, 1);
@@ -846,13 +778,13 @@ namespace System
 				result += digitValue;
 				if (postDecimal) postDecimalDigits++;
 			}
-			else if (digit == '.')
+			else if (digit == provider->NumberDecimalSeparator[0])
 			{
 				postDecimal = true;
 			}
 			else if (digit == 'e' || digit == 'E')
 			{
-				if (builder->default[0] == format->PositiveSign[0]) builder->Remove(0, 1);
+				if (builder->default[0] == provider->PositiveSign[0]) builder->Remove(0, 1);
 				postDecimalDigits -= System::Convert::ToInt32(builder->ToString());
 				break;
 			}
