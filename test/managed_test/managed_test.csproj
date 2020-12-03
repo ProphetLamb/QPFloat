@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
-    <RootNamespace>qpfloat_managed_test</RootNamespace>
+    <RootNamespace>managed_test</RootNamespace>
 
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <Reference Include="QPFloat">
-      <HintPath>..\..\src\out\QPFloat.dll</HintPath>
+      <HintPath>..\..\src\out\debug\QPFloat.dll</HintPath>
     </Reference>
   </ItemGroup>
 

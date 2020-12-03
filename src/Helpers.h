@@ -192,9 +192,3 @@ int FindHeadAndApplyRounding( ui32* buffer, int headScanBackStart );
 __float128 ScaleFactorTrigonometric();
 
 __float128 ScaleFactorHyperbolic();
-
-__float128 FactorialKPlusHalf(int k);
-
-__float128 GodfreyCoefficientMatrix(int n, int m);
-
-__float128 LanczosParameter(int k, int g);

@@ -156,11 +156,11 @@ public:
 	{
 		return GetBiasedExponent() == 0 && !IsZero();
 	}
-	static inline void Negate( __float128 &value)
+	inline static void Negate( __float128 &value)
 	{
 		*(value.storage + 15) ^= 0x80;
 	}
-	static inline void Negate(const __float128 &value, __float128 &result )
+	inline static void Negate(const __float128 &value, __float128 &result )
 	{
 		result = value;
 		Negate(result);
@@ -171,15 +171,22 @@ public:
 		Negate(copy);
 		return copy;
 	}
+	inline static int Sign(const __float128 &value) {
+		return value.IsZero() ? 0 : value.GetSign() ? -1 : 1;
+	}
+	static void Quantize(__float128 &value, const __float128 &exponent) {
+		value.SetBase2Exponent(exponent.GetBase2Exponent());
+	}
 	static void Add(const __float128 &left, const __float128 &right, __float128 &result);
 	static void Sub(const __float128 &left, const __float128 &right, __float128 &result);
 	static void Mul(const __float128 &left, const __float128 &right, __float128 &result);
 	static void Div(const __float128 &left, const __float128 &right, __float128 &result);
-	static inline void Inc(__float128 &value)
+	static void MulAdd(const __float128 &mpr, const __float128 &mpd, const __float128 &add, __float128 &result);
+	inline static void Inc(__float128 &value)
 	{
 		Add(value, QuadOne, value);
 	}
-	static inline void Dec(__float128 &value)
+	inline static void Dec(__float128 &value)
 	{
 		__float128 temp = QuadOne;
 		Sub(value, temp, value);
@@ -253,10 +260,14 @@ public:
 	}
 	friend inline bool operator >(const __float128 &left, const __float128 &right)
 	{
+		if (left.IsNaN() && right.IsNaN())
+			return false;
 		return __float128::Cmp(left, right) > 0;
 	}
 	friend inline bool operator <(const __float128 &left, const __float128 &right)
 	{
+		if (left.IsNaN() && right.IsNaN())
+			return false;
 		return __float128::Cmp(left, right) < 0;
 	}
 	friend inline bool operator>=(const __float128 &left, const __float128 &right)
@@ -293,6 +304,7 @@ public:
 		temp.SetBase2Exponent(temp.GetBase2Exponent() - shift);
 		return temp;
 	}
+	static inline __float128 Copy(const __float128 &value);
 	__float128(double value);
 	static void ToDouble(const __float128 &value, double &result);
 	__float128(i64 value);
@@ -352,6 +364,19 @@ public:
 		Round(value, result);
 		return result;
 	}
+	enum MidpointRoundingMode : byte {
+        ToEven = 0,
+        AwayFromZero = 1,
+        ToZero = 2,
+        ToNegativeInfinity = 3,
+        ToPositiveInfinity = 4
+	};
+	static void Round(const __float128 &value, int precision, MidpointRoundingMode mode, __float128 &result);
+	static inline __float128 Round(const __float128 &value, int precision, MidpointRoundingMode mode) {
+		__float128 result;
+		Round(value, precision, mode, result);
+		return result;
+	}
 	//result = Floor(Abs(value))
 	static void Truncate(const __float128 &value, ui64 &result);
 	static inline ui64 Truncate(const __float128 &value)
@@ -367,7 +392,8 @@ public:
 		__float128 result;
 		Fraction(value, result);
 		return result;
-	}
+	} 
+	static __float128 ModF(const __float128 &value, __float128 &integer);
 	static __float128 Sin(const __float128 &value);
 	static __float128 Cos(const __float128 &value);
 	static void SinCos(const __float128 &value, __float128 &resultSin, __float128 &resultCos);
@@ -376,11 +402,10 @@ public:
 	static __float128 ACos(const __float128 &value);
 	static __float128 ATan(const __float128 &value);
 	static __float128 ATan2(const __float128 &y, const __float128 &x);
-	static __float128 Gamma(const __float128 &value);
-	static void SinhCosh(const __float128 &value, __float128 &resultSin, __float128 &resultCos);
+	static void SinhCosh(const __float128 &value, __float128 &resultSinh, __float128 &resultCosh);
 	static __float128 Tanh(const __float128 &value);
 	static __float128 ATanh2(const __float128 &y, const __float128 &x);
-	static __float128 GammaPlusOne(const __float128 &value);
+	static __float128 Gamma(const __float128 &value);
 	static void CopySign(__float128 &value, const __float128 &sign);
 private:
 	static void Cordic(__float128 &x, __float128 &y, __float128 &z, int n, int k, int l);
