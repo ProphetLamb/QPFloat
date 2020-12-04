@@ -30,8 +30,8 @@ This file is part of QPFloat.
 #include "constants.h"
 #undef QUAD_CONSTANT
 // Constants for CORDIC algorithm
-__float128 TrigonometricScaleFactor = ScaleFactorTrigonometric();
-__float128 HyperbolicScaleFactor = ScaleFactorHyperbolic();
+static const __float128 TrgScl = ScaleFactorTrigonometric();
+static const __float128 HypScl = ScaleFactorHyperbolic();
 
 #define FPU_EXCEPTION_DEFINITION(x) \
 const char* x##ExceptionClass::what()const { \
@@ -123,19 +123,19 @@ __float128 __float128::PartialLn(const __float128 &value) {
 	__float128::Mul(result, temp3, result);
 	return result;
 }
-__float128 ScaleFactorTrigonometric() {
+static __float128 ScaleFactorTrigonometric() {
 	__float128 result = QuadOne;
 	__float128 two = 2;
 	int iteration = 0;
 	bool affecting = true;
 	while (affecting) {
-		__float128 step = Base2Exp(-iteration); // 2^-i
+		__float128 step = __float128::Base2Exp(-iteration); // 2^-i
 		if (!step.IsZero() && result.GetBase2Exponent() - step.GetBase2Exponent() <= QUAD_SIGNIFICANT_BITS) {
 			// increment = sqrt(1+(2^-i)^2)
 			// result *= increment
-			__float128 increment = Pow(step, two);
-			Add(increment, QuadOne, increment);
-			Mul(result, Pow(increment, QuadHalf), result);
+			__float128 increment = __float128::Pow(step, two);
+			__float128::Add(increment, QuadOne, increment);
+			__float128::Mul(result, __float128::Pow(increment, QuadHalf), result);
 		} else {
 			affecting = false;
 		}
@@ -145,21 +145,20 @@ __float128 ScaleFactorTrigonometric() {
 	}
 	return result;
 }
-
-__float128 ScaleFactorHyperbolic() {
+static __float128 ScaleFactorHyperbolic() {
 	__float128 result = QuadOne;
 	__float128 two = 2;
 	int iteration = 1;
 	bool affecting = true;
 	while (affecting) {
-		__float128 step = Base2Exp(-iteration); // 2^-i
+		__float128 step = __float128::Base2Exp(-iteration); // 2^-i
 		if (!step.IsZero() && result.GetBase2Exponent() - step.GetBase2Exponent() <= QUAD_SIGNIFICANT_BITS) {
 			// increment = sqrt(1-(2^-i)^2)
 			// result *= increment
-			__float128 increment = Pow(step, two);
-			Negate(increment);
-			Add(increment, QuadOne, increment);
-			Mul(result, Pow(increment, QuadHalf), result);
+			__float128 increment = __float128::Pow(step, two);
+			__float128::Negate(increment);
+			__float128::Add(increment, QuadOne, increment);
+			__float128::Mul(result, __float128::Pow(increment, QuadHalf), result);
 		} else {
 			affecting = false;
 		}
@@ -377,11 +376,11 @@ void __float128::Div( const __float128 &left, const __float128 &right, __float12
 	else
 		ReadOutResult((ui32*)res, 128, resultExponent, aSign ^ bSign, result);
 }
-void __float128::MulAdd(const __float128 &mpr, const __float128 &mpd, const __float128 &add, __float128 &result) {
+void __float128::FMulAdd(const __float128 &mpr, const __float128 &mpd, const __float128 &add, __float128 &result) {
 	__float128::Mul(mpr, mpd, result);
 	__float128::Add(result, add, result);
 }
-bool __float128::Equals(const __float128 &left, const __float128 &right) {
+bool __float128::Eql(const __float128 &left, const __float128 &right) {
 	if (left.IsNaN() || right.IsNaN()) return false; //NaN =/= NaN
 	if (left.IsZero() && right.IsZero()) return true; //-0 = 0
 	ui64* lPtr = (ui64*)left.storage;
@@ -390,7 +389,7 @@ bool __float128::Equals(const __float128 &left, const __float128 &right) {
 	if (*(lPtr) != *(rPtr)) return false;
 	return true;
 }
-bool __float128::EpsilonEquals(const __float128 &left, const __float128 &right) {
+bool __float128::EpsEql(const __float128 &left, const __float128 &right) {
 	if (left.IsNaN() || right.IsNaN()) return false; //NaN =/= NaN
 	if (left.IsZero() && right.IsZero()) return true; //-0 = 0
 	__float128 c;
@@ -399,8 +398,10 @@ bool __float128::EpsilonEquals(const __float128 &left, const __float128 &right) 
 	return c < QuadEpsilon;
 }
 i32 __float128::Cmp(const __float128 &left, const __float128 &right) {
-	if (left.IsNaN() && right.IsNaN())
-		return 0;
+	if (left.IsNaN())
+		return 1;
+	if (right.IsNaN())
+		return -1;
 	i32 cmpExp = left.GetBiasedExponent() - right.GetBiasedExponent();
 	if (cmpExp == 0) {
 		const byte* lPtr = left.storage;
@@ -621,7 +622,11 @@ __float128 __float128::Pow(const __float128 &base, const __float128 &exponent) {
 			if (exponent.GetSign()) return QuadZero;
 			return base;
 		}
-		if ((((__float128)-1) ^ exponent).GetSign()) return QuadNegativeInfinity; else return QuadPositiveInfinity;
+		if (Pow(QuadNegOne, exponent).GetSign())
+			return QuadNegativeInfinity; 
+		else
+			return QuadPositiveInfinity;
+		
 	}
 	if (exponent.IsInfinite()) {
 		if (exponent.GetSign()) return QuadZero;
@@ -834,7 +839,7 @@ __float128 __float128::ASin(const __float128 &value) {
 			Add(result, increment, result);
 
 			//i++;
-			Add(i, QuadOne, i);
+			Inc(i);
 
 			iIteration++;
 
@@ -975,13 +980,81 @@ __float128 __float128::ATan2(const __float128 &y, const __float128 &x ) {
 		return partial;
 }
 
+void __float128::CordicTan(__float128 &x, __float128 &y, __float128 &z, __float128 delta, int n, int k) {
+	__float128 incx, incy, incz, sign = QuadOne;
+	bool affecting = true;
+	do {
+		CopySign(sign, z);
+		// incx=sign*delta*y
+		Mul(delta, y, incx);
+		Mul(sign, incx, incx);
+		// incy=sign*delta*x
+		Mul(delta, x, incy);
+		Mul(sign, incy, incy);
+		if ((!incx.IsZero() 
+		&& x.GetBase2Exponent() - incx.GetBase2Exponent() <= QUAD_SIGNIFICANT_BITS)
+		|| (!incy.IsZero() 
+		&& y.GetBase2Exponent() - incy.GetBase2Exponent() <= QUAD_SIGNIFICANT_BITS)) {
+			Add(x, incx, x);
+			Add(y, incy, y);
+			// z -= sign*0.5*log((1+delta)/(1-delta))
+			Div(delta - QuadOne, QuadOne - delta, incz);
+			incz = Ln(incz);
+			Mul(QuadHalf, incz, incz);
+			Mul(sign, incz, incz);
+			Sub(z, incz, z);
+			if (n == k) {
+				k = 3*k + 1;
+			} else {
+				delta = delta >> 1; //delta /= 2
+				n++;
+			}
+		} else {
+			affecting = false;
+		}
+	} while (affecting);
+}
+
+void __float128::CordicArctan(__float128 &x, __float128 &y, __float128 &z, __float128 delta, int n, int k) {
+	__float128 incx, incy, incz, sign = QuadOne;
+	bool affecting = true;
+	do {
+		CopySign(sign, z);
+		// incx=sign*delta*y
+		Mul(delta, y, incx);
+		Mul(sign, incx, incx);
+		// incy=sign*delta*x
+		Mul(delta, x, incy);
+		Mul(sign, incy, incy);
+		if ((!incx.IsZero() 
+		&& x.GetBase2Exponent() - incx.GetBase2Exponent() <= QUAD_SIGNIFICANT_BITS)
+		|| (!incy.IsZero() 
+		&& y.GetBase2Exponent() - incy.GetBase2Exponent() <= QUAD_SIGNIFICANT_BITS)) {
+			Sub(x, incx, x);
+			Add(y, incy, y);
+			// z -= sign*atan(delta)
+			incz = ATan(delta);
+			Mul(sign, incz, incz);
+			Sub(z, incz, z);
+			if (n == k) {
+				k = 3*k + 1;
+			} else {
+				delta = delta >> 1; //delta /= 2
+				n++;
+			}
+		} else {
+			affecting = false;
+		}
+	} while (affecting);
+}
+
 void __float128::SinhCosh(const __float128 &value, __float128 &resultSinh, __float128 &resultCosh) {
 	__float128 z = value;
 	resultCosh = QuadOne;
 	resultSinh = QuadZero;
-	Cordic(resultCosh, resultSinh, z, 1, 4, 52);
-	Div(resultCosh, HyperbolicScaleFactor, resultCosh);
-	Div(resultSinh, HyperbolicScaleFactor, resultSinh);
+	CordicTan(resultCosh, resultSinh, z, QuadHalf, 1, 4);
+	Div(resultCosh, HypScl, resultCosh);
+	Div(resultSinh, HypScl, resultSinh);
 }
 
 __float128 __float128::Tanh(const __float128 &value) {
@@ -993,48 +1066,9 @@ __float128 __float128::Tanh(const __float128 &value) {
 
 __float128 __float128::ATanh2(const __float128 &y, const __float128 &x) {
 	__float128 resultX = x, resultY = y, z = 0;
-	Cordic(resultX, resultY, z, 1, 4, 36);
-	Div(resultX, HyperbolicScaleFactor, resultX);
+	CordicTan(resultX, resultY, z, QuadHalf, 1, 4);
+	Div(resultX, HypScl, resultX);
 	return resultX;
-}
-
-__float128 lanczosParameters[24] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-
-__float128 __float128::Gamma(const __float128 &value) { // Gamma(z+1)
-	if (value < QuadHalf) {
-		return QuadPi / (Sin(QuadPi*value) * Gamma(1 - value));
-	} else {
-		// a=z+g+.5
-		__float128 a = value;
-		Add(a, 24, a);
-		Add(a, QuadHalf, a);
-		// a^-a
-		__float128 temp1 = a;
-		Negate(temp1);
-		temp1 = Pow(a, temp1);
-		// a^(z+.5)
-		__float128 temp2 = value;
-		Add(temp2, QuadHalf, temp2);
-		temp2 = Pow(a, temp2);
-		// sqrt(2pi)
-		__float128 temp3 = 2;
-		Mul(temp3, QuadPi, temp3);
-		temp3 = Pow(temp3, QuadHalf);
-		// A_g(z)
-		__float128 temp4 = QuadZero;
-		for (int k = 0; k < 24; k++) {
-			__float128 temp5;
-			Add(value, k, temp5);
-			Inc(temp5);
-			Div(lanczosParameters[k], temp5, temp5);
-			Add(temp4, temp5, temp4);
-		}
-
-		Mul(temp1, temp2, temp1);
-		Mul(temp1, temp3, temp1);
-		Mul(temp1, temp4, temp1);
-		return temp1;
-	}
 }
 
 void __float128::Fraction(const __float128 &value, __float128 &result) {
@@ -1100,18 +1134,20 @@ void __float128::Round(const __float128 &value, __float128 &result) {
 	}
 }
 void __float128::Round(const __float128 &value, int precision, MidpointRoundingMode mode, __float128 &result) {
-	const __float128 power10Table[37] = {
+	static const __float128 power10Table[37] = {
 		Pow(10, 00), Pow(10, 01), Pow(10, 02), Pow(10, 03), Pow(10, 04), Pow(10, 05), Pow(10, 06), Pow(10, 07), Pow(10,  8), Pow(10,  9),
 		Pow(10, 10), Pow(10, 11), Pow(10, 12), Pow(10, 13), Pow(10, 14), Pow(10, 15), Pow(10, 16), Pow(10, 17), Pow(10, 18), Pow(10, 19),
 		Pow(10, 20), Pow(10, 21), Pow(10, 22), Pow(10, 23), Pow(10, 24), Pow(10, 25), Pow(10, 26), Pow(10, 27), Pow(10, 28), Pow(10, 29),
 		Pow(10, 30), Pow(10, 31), Pow(10, 32), Pow(10, 33), Pow(10, 34), Pow(10, 35), Pow(10, 36) };
-	const __float128 negPower10Table[37] = {
+	static const __float128 negPower10Table[37] = {
 		Pow(10, -00), Pow(10, -01), Pow(10, -02), Pow(10, -03), Pow(10, -04), Pow(10, -05), Pow(10, -06), Pow(10, -07), Pow(10,  -8), Pow(10,  -9),
 		Pow(10, -10), Pow(10, -11), Pow(10, -12), Pow(10, -13), Pow(10, -14), Pow(10, -15), Pow(10, -16), Pow(10, -17), Pow(10, -18), Pow(10, -19),
 		Pow(10, -20), Pow(10, -21), Pow(10, -22), Pow(10, -23), Pow(10, -24), Pow(10, -25), Pow(10, -26), Pow(10, -27), Pow(10, -28), Pow(10, -29),
 		Pow(10, -30), Pow(10, -31), Pow(10, -32), Pow(10, -33), Pow(10, -34), Pow(10, -35), Pow(10, -36) };
-	if ((uint32_t)precision > 36)
-		precision = 36;
+	if ((uint32_t)precision > 36) {
+		result = QuadNaN;
+		return;
+	}
 	int unbiasedExponent = value.GetBase2Exponent();
 	if (unbiasedExponent == QUAD_EXPONENT_MAX) result = value; //NaN, +inf, -inf
 	else if (unbiasedExponent < -1) result = QuadZero;
@@ -1187,36 +1223,36 @@ void __float128::CopySign(__float128 &value, const __float128 &sign) {
 		*(vPtr + 15) = (*(sPtr + 15) & 0x80) | (*(vPtr + 15) & 0x7F);
 }
 
-void __float128::Cordic(__float128 &x, __float128 &y, __float128 &z, int n, int k, int l) {
-	__float128 delta = QuadHalf;
-	do {
-		__float128 sign = QuadOne;
-		CopySign(sign, z);
-		// x += sign*delta*y
-		__float128 tempX, tempY;
-		Mul(delta, y, tempX);
-		x += tempX;
-		// y += sign*delta*x
-		Mul(delta, x, tempY);
-		y += tempY;
-
-		// value -= sign*0.5*log((1+delta)/(1-delta))
-		tempX = delta;
-		Inc(tempX);
-		Sub(QuadOne, delta, tempY);
-		Div(tempX, tempY, tempX);
-		Log(tempX, QuadE);
-		Mul(QuadHalf, tempX, tempX);
-		Mul(sign, tempX, tempX);
-		z -= tempX;
-
-		if (n == k) {
-			k = 3*k + 1;
-		} else {
-			delta = delta >> 1;
-			n++;
+__float128 __float128::Gamma(const __float128 &value) {
+	const int g = 24;
+	static __float128 c_alloc[g];
+	static __float128* c = NULL;
+	int k;
+	__float128 accu, temp;
+	if (c == NULL) {
+		__float128 k1_fac = QuadOne;
+		c = c_alloc;
+		c[0] = Pow(QuadTwoPi, QuadHalf);
+		for(k = 1; k < g; k++) {
+			temp = Exp(g-k);
+			Mul(temp, Pow(g-k, (__float128)k-QuadHalf), temp);
+			Div(temp, k1_fac, c[k]);
+			k1_fac *= -k;
 		}
-	} while(n <= l);
+	}
+	accu = c[0];
+	for(k = 1; k < g; k++) {
+		temp = value + k;
+		Div(c[k], temp, temp);
+		accu += temp;
+	}
+	temp = value + g;
+	Negate(temp);
+	temp = Exp(temp);
+	Mul(temp, Pow(g-k, (__float128)k-QuadHalf), temp);
+	Mul(accu, temp, accu);
+	Div(accu, value, accu);
+	return accu;
 }
 
 #ifdef _MANAGED

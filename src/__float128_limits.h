@@ -7,7 +7,7 @@
 #pragma unmanaged
 #endif 
 
-template<> class std::numeric_limits<__float128> {
+template<> class _CRTIMP2_PURE std::numeric_limits<__float128> {
     static const bool is_specialized = false;
     static inline __float128 min() {
         return __float128::FromData(nearest_zero);

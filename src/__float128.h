@@ -72,13 +72,15 @@ private:
 		if (value < 0) return QuadNaN;
 		if (value > MAX_FACTORIAL) return QuadPositiveInfinity;
 		return factorials[value];
-	}	
+	}
 	static __float128 FactorialReciprocal(i32 value)
 	{
 		if (value < 0) return QuadNaN;
 		if (value > MAX_FACTORIAL) return QuadPositiveInfinity;
 		return factorialReciprocals[value];
 	}
+	static void CordicTan(__float128 &x, __float128 &y, __float128 &z, __float128 delta, int n, int k);
+	static void CordicArctan(__float128 &x, __float128 &y, __float128 &z, __float128 delta, int n, int k);
 public:
 	__float128();
 	static inline __float128& FromData(const byte *data)
@@ -98,25 +100,18 @@ public:
 		else
 			*(ptr + 15) &= 0x7f;
 	}
-	inline i32 GetBase2Exponent() const
-	{
+	inline i32 GetBase2Exponent() const {
 		return (i32)GetBiasedExponent() - QUAD_EXPONENT_BIAS;
 	}
-	inline void SetBase2Exponent(i32 value)
-	{
-		if (value >= QUAD_EXPONENT_MAX)
-		{
-			if (GetSign())
-				*this = QuadNegativeInfinity;
-			else
-				*this = QuadPositiveInfinity;
+	inline void SetBase2Exponent(i32 value) {
+		if (value >= QUAD_EXPONENT_MAX) {
+			*this = GetSign() ? QuadNegativeInfinity : QuadPositiveInfinity;
 			return;
 		}
 		if (value < QUAD_EXPONENT_MIN) value = QUAD_EXPONENT_MIN;
 		SetBiasedExponent((ui16)(value + QUAD_EXPONENT_BIAS));
 	}
-	inline bool IsZero() const
-	{
+	inline bool IsZero() const {
 		ui32* ptr = (ui32*)storage;
 		if (*(ptr + 3) != 0)
 			if (*(ptr + 3) != 0x80000000) return false;
@@ -127,8 +122,7 @@ public:
 		if (*ptr != 0) return false;
 		return true;
 	}
-	inline bool IsNaN() const
-	{
+	inline bool IsNaN() const {
 		if (GetBiasedExponent() != 0x7FFF) return false;
 		i32* ptr = (i32*)storage;
 		if (*ptr != 0) return true;
@@ -140,8 +134,7 @@ public:
 		if (*(ui16*)ptr != 0) return true;
 		return false;
 	}
-	inline bool IsInfinite() const
-	{
+	inline bool IsInfinite() const {
 		ui32* ptr = (ui32*)storage;
 		if (*ptr != 0) return false;
 		ptr++;
@@ -152,9 +145,12 @@ public:
 		if ((*ptr & 0x7FFFFFFF) != 0x7FFF0000) return false;
 		return true;
 	}
-	inline bool IsSubNormal() const
-	{
+	inline bool IsSubNormal() const {
 		return GetBiasedExponent() == 0 && !IsZero();
+	}
+	inline bool IsNormal() const {
+		ui16 bExp = GetBiasedExponent();
+		return bExp != 0x7FFF && bExp != 0;
 	}
 	inline static void Negate( __float128 &value)
 	{
@@ -181,125 +177,102 @@ public:
 	static void Sub(const __float128 &left, const __float128 &right, __float128 &result);
 	static void Mul(const __float128 &left, const __float128 &right, __float128 &result);
 	static void Div(const __float128 &left, const __float128 &right, __float128 &result);
-	static void MulAdd(const __float128 &mpr, const __float128 &mpd, const __float128 &add, __float128 &result);
-	inline static void Inc(__float128 &value)
-	{
+	static void FMulAdd(const __float128 &mpr, const __float128 &mpd, const __float128 &add, __float128 &result);
+	inline static void Inc(__float128 &value) {
 		Add(value, QuadOne, value);
 	}
-	inline static void Dec(__float128 &value)
-	{
+	inline static void Dec(__float128 &value) {
 		__float128 temp = QuadOne;
 		Sub(value, temp, value);
 	}
-	static bool Equals(const __float128 &left, const __float128 &right);
-	inline bool Equals(const __float128 &other)
-	{
-		return Equals(*this, other);
+	static bool Eql(const __float128 &left, const __float128 &right);
+	inline bool Eql(const __float128 &other) const {
+		return Eql(*this, other);
 	}
-	static bool EpsilonEquals(const __float128 &left, const __float128 &right);
-	inline bool EpsilonEquals(const __float128 &other)
-	{
-		return EpsilonEquals(*this, other);
+	static bool EpsEql(const __float128 &left, const __float128 &right);
+	inline bool EpsEql(const __float128 &other) const {
+		return EpsEql(*this, other);
 	}
 	static i32 Cmp(const __float128 &left, const __float128 &right);
-	inline i32 Cmp(const __float128 &other)
-	{
+	inline i32 Cmp(const __float128 &other) const {
 		return Cmp(*this, other);
 	}
-	friend inline __float128 operator+(const __float128 &left, const __float128 &right)
-	{
+	__float128 operator+(const __float128 &other) const {
 		__float128 result;
-		Add(left, right, result);
+		Add(*this, other, result);
 		return result;
 	}
-	__float128& operator+=(const __float128 &other)
-	{
+	inline __float128& operator+=(const __float128 &other) {
 		Add(*this, other, *this);
 		return *this;
 	}
-	friend inline __float128 operator-(const __float128 &left, const __float128 &right)
-	{
+	inline __float128 operator-(const __float128 &other) const {
 		__float128 result;
-		Sub(left, right, result);
+		Sub(*this, other, result);
 		return result;
 	}
-	__float128& operator-=(const __float128 &other)
-	{
+	inline  __float128& operator-=(const __float128 &other) {
 		Add(*this, other, *this);
 		return *this;
 	}
-	friend inline __float128 operator*(const __float128 &left, const __float128 &right)
-	{
+	inline __float128 operator*(const __float128 &other) const {
 		__float128 result;
-		Mul(left, right, result);
+		Mul(*this, other, result);
 		return result;
 	}
-	__float128& operator*=(const __float128 &other)
-	{
+	inline  __float128& operator*=(const __float128 &other) {
 		Add(*this, other, *this);
 		return *this;
 	}
-	friend inline __float128 operator/(const __float128 &left, const __float128 &right)
-	{
+	inline __float128 operator/(const __float128 &other) const {
 		__float128 result;
-		Div(left, right, result);
+		Div(*this, other, result);
 		return result;
 	}
-	__float128& operator/=(const __float128 &other)
-	{
+	inline  __float128& operator/=(const __float128 &other) {
 		Div(*this, other, *this);
 		return *this;
 	}
-	friend inline bool operator==(const __float128 &left, const __float128 &right)
-	{
-		return __float128::Equals(left, right);
+	inline bool operator==(const __float128 &other) const {
+		return Eql(*this, other);
 	}
-	friend inline bool operator!=(const __float128 &left, const __float128 &right)
-	{
-		return !__float128::Equals(left, right);
+	inline bool operator!=(const __float128 &other) const {
+		return !Eql(*this, other);
 	}
-	friend inline bool operator >(const __float128 &left, const __float128 &right)
-	{
-		if (left.IsNaN() && right.IsNaN())
+	inline bool operator >(const __float128 &other) const {
+		if ((*this).IsNaN() && other.IsNaN())
 			return false;
-		return __float128::Cmp(left, right) > 0;
+		return Cmp(*this, other) > 0;
 	}
-	friend inline bool operator <(const __float128 &left, const __float128 &right)
-	{
-		if (left.IsNaN() && right.IsNaN())
+	inline bool operator <(const __float128 &other) const {
+		if ((*this).IsNaN() && other.IsNaN())
 			return false;
-		return __float128::Cmp(left, right) < 0;
+		return Cmp(*this, other) < 0;
 	}
-	friend inline bool operator>=(const __float128 &left, const __float128 &right)
-	{
-		if (left == right) return true; //ensure that equals test happens first because it's much faster
-		else return left > right;
+	inline bool operator>=(const __float128 &other) const {
+		if (Eql(*this, other)) return true; //ensure that equals test happens first because it's much faster
+		else return *this > other;
 	}
-	friend inline bool operator<=(const __float128 &left, const __float128 &right)
-	{
-		if (left == right) return true; //ensure that equals test happens first because it's much faster
-		else return left < right;
+	inline bool operator<=(const __float128 &other) const {
+		if (Eql(*this, other)) return true; //ensure that equals test happens first because it's much faster
+		else return *this < other;
 	}
-	inline __float128 operator++()
-	{
+	inline __float128& operator++() {
 		__float128 temp = QuadOne;
 		Add(temp, *this, *this);
 		return *this;
 	}
-	inline __float128 operator--()
-	{
+	inline __float128& operator--() {
 		__float128 temp = QuadNegOne;
 		Add(temp, *this, *this);
 		return *this;
 	}
-	__float128 inline operator<<(i32 shift) const
-	{
+	inline __float128 operator<<(i32 shift) const {
 		__float128 temp = *this;
 		temp.SetBase2Exponent(temp.GetBase2Exponent() + shift);
 		return temp;
 	}
-	__float128 inline operator>>(i32 shift) const
-	{
+	inline __float128 operator>>(i32 shift) const {
 		__float128 temp = *this;
 		temp.SetBase2Exponent(temp.GetBase2Exponent() - shift);
 		return temp;
@@ -312,22 +285,19 @@ public:
 	__float128(i32 value);
 	static void ToInt32(const __float128 &value, i32 &result);
 	static void Abs(const __float128 &value, __float128 &result);
-	static inline __float128 Abs(const __float128 &value)
-	{
+	static inline __float128 Abs(const __float128 &value) {
 		__float128 result;
 		Abs(value, result);
 		return result;
 	}
 	static void Max(const __float128 &left, const __float128 &right, __float128 &result);
-	static inline __float128 Max(const __float128 &left, const __float128 &right)
-	{
+	static inline __float128 Max(const __float128 &left, const __float128 &right) {
 		__float128 result;
 		Max(left, right, result);
 		return result;
 	}
 	static void Min(const __float128 &left, const __float128 &right, __float128 &result);
-	static inline __float128 Min(const __float128 &left, const __float128 &right)
-	{
+	static inline __float128 Min(const __float128 &left, const __float128 &right) {
 		__float128 result;
 		Min(left, right, result);
 		return result;
@@ -337,10 +307,7 @@ public:
 	static __float128 Base2Exp(i32 value);
 	static __float128 Base2Exp(const __float128 &value);
 	static __float128 Pow(const __float128 &base, const __float128 &exponent);
-	__float128 inline operator^(const __float128 &right)
-	{
-		return Pow(*this, right);
-	}
+	inline __float128 operator^(const __float128 &right) const { return Pow(*this, right); }
 	static __float128 Log(const __float128 &value, const __float128 &base);
 	static __float128 Log2(const __float128 &value);
 	static void Ceiling(const __float128 &value, __float128 &result);
@@ -364,12 +331,12 @@ public:
 		Round(value, result);
 		return result;
 	}
-	enum MidpointRoundingMode : byte {
-        ToEven = 0,
+	enum MidpointRoundingMode : int {
+        ToEven = 0, // Round
         AwayFromZero = 1,
-        ToZero = 2,
-        ToNegativeInfinity = 3,
-        ToPositiveInfinity = 4
+        ToZero = 2, // Trunc
+        ToNegativeInfinity = 3, // Floor
+        ToPositiveInfinity = 4 // Ceiling
 	};
 	static void Round(const __float128 &value, int precision, MidpointRoundingMode mode, __float128 &result);
 	static inline __float128 Round(const __float128 &value, int precision, MidpointRoundingMode mode) {
@@ -405,11 +372,9 @@ public:
 	static void SinhCosh(const __float128 &value, __float128 &resultSinh, __float128 &resultCosh);
 	static __float128 Tanh(const __float128 &value);
 	static __float128 ATanh2(const __float128 &y, const __float128 &x);
+	static inline void CopySign(__float128 &value, const __float128 &sign);
 	static __float128 Gamma(const __float128 &value);
-	static void CopySign(__float128 &value, const __float128 &sign);
-private:
-	static void Cordic(__float128 &x, __float128 &y, __float128 &z, int n, int k, int l);
-	//static __float128 Factorial(__float128 &value);
+	static __float128 Factorial(const __float128 &value) { return Gamma(value + QuadOne); }
 };
 
 #pragma warning(disable: 4949)

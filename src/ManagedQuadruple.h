@@ -431,9 +431,9 @@ namespace System
 		}
 
 		virtual String^ ToString() override;
-		virtual String^ ToString(String^ format) override;
-		virtual String^ ToString(IFormatProvider^ provider) override;
-		virtual String^ ToString(String^ format, IFormatProvider^ provider) override;
+		String^ ToString(String^ format);
+		String^ ToString(IFormatProvider^ provider);
+		virtual String^ ToString(String^ format, IFormatProvider^ provider);
 		static Quadruple FromString(String^ str)
 		{
 			return Quadruple::FromString(str, System::Globalization::CultureInfo::CurrentCulture->NumberFormat);
@@ -446,9 +446,9 @@ namespace System
 			return v.IsSigned ? -1 : 1;
 		}
 
-		virtual int CompareTo(Quadruple other) override;	//	AK
+		virtual int CompareTo(Quadruple other);
 
-		virtual bool Equals(Quadruple other) override;
+		virtual bool Equals(Quadruple other);
 #include "constants.h"
 
 	};
